@@ -1,0 +1,132 @@
+﻿<script>
+  import { X } from '@lucide/svelte';
+  let { open = false, title = '', wide = false, wider = false, full = false, narrow = false, compact = false, noHeader = false, noBodyScroll = false, onclose, children } = $props();
+
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onclose?.();
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape') onclose?.();
+  }
+</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+{#if open}
+  <div data-section="modal-backdrop" class="backdrop" role="presentation" onclick={handleBackdrop} onkeydown={handleKeydown}>
+    <div data-section="modal" class="modal" class:wide class:wider class:full class:narrow class:compact role="dialog" aria-modal="true">
+      {#if !noHeader}
+        <div data-label="modal-header" class="modal-header">
+          <h3 data-label="modal-title" class="modal-header-title">{title}</h3>
+          <button data-label="modal-close" class="close-btn" onclick={onclose}>
+            <X size={18} />
+          </button>
+        </div>
+      {/if}
+      <div data-label="modal-body" class="modal-body" class:no-scroll={noBodyScroll}>
+        {@render children()}
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 11, 20, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+  }
+
+  .modal {
+    background: var(--modal-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-width: 700px;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 30px var(--cyan-glow);
+  }
+
+  .modal.wide {
+    max-width: 960px;
+  }
+
+  .modal.wider {
+    max-width: 1440px;
+  }
+
+  .modal.full {
+    max-width: 85vw;
+    width: 85vw;
+    max-height: 92vh;
+  }
+
+  .modal.narrow {
+    max-width: min(53.125vw, 1000px);
+    width: min(53.125vw, 1000px);
+  }
+
+  .modal.compact {
+    width: fit-content;
+    min-width: 380px;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .modal-header-title {
+    font-family: var(--font-heading-1);
+    font-size: var(--fs-heading-2);
+    font-weight: 700;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+  }
+
+  .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .close-btn:hover {
+    color: var(--text);
+    background: var(--bg-elevated);
+    border-color: var(--cyan-dim);
+  }
+
+  .modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .modal-body.no-scroll {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+</style>

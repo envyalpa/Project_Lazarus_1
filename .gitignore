@@ -1,0 +1,48 @@
+node_modules
+
+# Svelte / Build Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Runtime Database & Media
+data/
+
+# Machine Learning Models
+/models/
+
+# Compiled whisper binaries
+/bin/
+
+# Local OpenCode & CodeGraph Indexes
+.codegraph/
+.opencode/
+
+# Knowledge Graph Artifacts
+/graphify-out/
+
+# Developer scratchscripts
+/tmp/
+
+# Execution and check logs
+/server_out.txt
+/server_err.txt
+/check_errors.txt
