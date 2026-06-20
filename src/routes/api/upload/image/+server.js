@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join, resolve } from 'path';
 import crypto from 'crypto';
 
@@ -47,3 +47,39 @@ export async function POST({ request }) {
   writeFileSync(filepath, buffer);
   return json({ url: `/images/${filename}`, localPath: resolve(filepath) });
 }
+
+export async function DELETE({ request }) {
+  try {
+    const { url, localPath } = await request.json();
+    if (!url) {
+      return json({ error: 'No url provided' }, { status: 400 });
+    }
+
+    if (url.startsWith('/images/')) {
+      const cleanPath = url.split('?')[0].replace(/^\/images\//, '');
+      if (cleanPath.includes('..') || cleanPath.includes('/') || cleanPath.includes('\\')) {
+        return json({ error: 'Invalid path' }, { status: 400 });
+      }
+      const filepath = join(UPLOAD_DIR, cleanPath);
+      if (existsSync(filepath)) {
+        unlinkSync(filepath);
+        console.log(`[API] Deleted local image: ${filepath}`);
+      }
+    }
+
+    if (localPath) {
+      const resolvedPath = resolve(localPath);
+      const resolvedStatic = resolve(UPLOAD_DIR);
+      if (resolvedPath.startsWith(resolvedStatic) && existsSync(resolvedPath)) {
+        unlinkSync(resolvedPath);
+        console.log(`[API] Deleted localPath: ${resolvedPath}`);
+      }
+    }
+
+    return json({ success: true });
+  } catch (err) {
+    console.error('[API] Error deleting image file:', err);
+    return json({ error: err.message }, { status: 500 });
+  }
+}
+

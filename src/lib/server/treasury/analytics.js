@@ -18,27 +18,6 @@ export function getTrendsData(period = 'month', count = 12) {
   return rows.map(r => ({ ...r, net: r.income - r.expense }));
 }
 
-export function getCategorySpendingByMonth(categoryId, months = 12) {
-  return db.prepare(`
-    SELECT substr(date, 1, 7) as ym, COALESCE(SUM(amount), 0) as total
-    FROM transactions
-    WHERE category_id = ? AND type = 'expense'
-      AND date >= date('now', ? || ' months', 'start of month')
-    GROUP BY ym ORDER BY ym ASC
-  `).all(categoryId, `-${months}`);
-}
-
-export function getTopMerchants(limit = 10, startDate, endDate) {
-  const clauses = ["paid_to != ''"];
-  const params = { limit };
-  if (startDate) { clauses.push('date >= @start'); params.start = startDate; }
-  if (endDate) { clauses.push('date <= @end'); params.end = endDate; }
-  return db.prepare(`
-    SELECT paid_to as merchant, SUM(amount) as total, COUNT(*) as count
-    FROM transactions WHERE ${clauses.join(' AND ')}
-    GROUP BY paid_to ORDER BY total DESC LIMIT @limit
-  `).all(params);
-}
 
 export function getPeriodComparison(start1, end1, start2, end2) {
   function periodStats(s, e) {
@@ -75,29 +54,6 @@ export function getPeriodComparison(start1, end1, start2, end2) {
   };
 }
 
-export function getAllCategoryMonthlySpending(months = 12) {
-  const cats = db.prepare('SELECT * FROM categories ORDER BY name ASC').all();
-  const spending = db.prepare(`
-    SELECT t.category_id, substr(t.date, 1, 7) as ym, COALESCE(SUM(t.amount), 0) as total
-    FROM transactions t WHERE t.type = 'expense'
-      AND t.date >= date('now', ? || ' months', 'start of month')
-    GROUP BY t.category_id, ym ORDER BY ym ASC
-  `).all(`-${months}`);
-  return cats.map(c => ({ ...c, spendingByMonth: spending.filter(s => s.category_id === c.id) }));
-}
-
-export function getPaidForAnalysis(months = 12) {
-  return db.prepare(`
-    SELECT substr(date, 1, 7) as ym,
-      COALESCE(SUM(CASE WHEN paid_for LIKE '%Wife%' THEN amount ELSE 0 END), 0) as wife,
-      COALESCE(SUM(CASE WHEN paid_for LIKE '%Sister%' THEN amount ELSE 0 END), 0) as sister,
-      COALESCE(SUM(CASE WHEN paid_for LIKE '%Family%' THEN amount ELSE 0 END), 0) as family,
-      COALESCE(SUM(CASE WHEN paid_for = '' OR paid_for IS NULL THEN amount ELSE 0 END), 0) as self
-    FROM transactions WHERE type = 'expense'
-      AND date >= date('now', ? || ' months', 'start of month')
-    GROUP BY ym ORDER BY ym ASC
-  `).all(`-${months}`);
-}
 
 export function getNetWorthHistory(months = 12) {
   return db.prepare(`

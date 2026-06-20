@@ -1,7 +1,5 @@
 import db from '../db.js';
 
-export const PERSON_NAMES = ['Family', 'Sister', 'Wife'];
-
 const stmts = {
   getAll: db.prepare('SELECT * FROM people ORDER BY created_at DESC'),
   getById: db.prepare('SELECT * FROM people WHERE id = ?'),

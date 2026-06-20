@@ -33,7 +33,6 @@ const stmts = {
   `),
   create: db.prepare('INSERT INTO academy_notes (area_id, course_id, title, content, view_mode) VALUES (@area_id, @course_id, @title, @content, @view_mode)'),
   update: db.prepare('UPDATE academy_notes SET area_id = @area_id, course_id = @course_id, title = @title, content = @content, view_mode = @view_mode WHERE id = @id'),
-  updateContent: db.prepare('UPDATE academy_notes SET content = @content, updated_at = datetime(\'now\') WHERE id = @id'),
   remove: db.prepare('DELETE FROM academy_notes WHERE id = ?')
 };
 
@@ -49,7 +48,7 @@ export function getByCourse(courseId) {
   return stmts.getByCourse.all(courseId);
 }
 
-export function getById(id) {
+function getById(id) {
   return stmts.getById.get(id) || null;
 }
 
@@ -78,10 +77,6 @@ export function update(id, data) {
   return getById(id);
 }
 
-export function updateContent(id, content) {
-  stmts.updateContent.run({ content: content, id: id });
-  return getById(id);
-}
 
 export function remove(id) {
   const note = getById(id);

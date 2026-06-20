@@ -1,5 +1,5 @@
 <script>
-  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search, LoaderCircle, RefreshCw, Sparkles } from '@lucide/svelte';
+  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search, LoaderCircle, RefreshCw, Sparkles, FileText, Undo, Redo } from '@lucide/svelte';
   import { agentStore } from '$lib/stores/agent.svelte.js';
   import { slide } from 'svelte/transition';
   import { notify } from '$lib/stores/notification.js';
@@ -23,6 +23,55 @@
   let saving = $state(false);
   let editorReady = $state(false);
   let editorMode = $state('normal');
+  let lastNonBookMode = $state('normal');
+  let editorCurrentSpread = $state(0);
+  let editorTotalSpreads = $state(1);
+  
+  // Undo/Redo Bindings
+  let editorCanUndo = $state(false);
+  let editorCanRedo = $state(false);
+  let editorTriggerUndo = $state();
+  let editorTriggerRedo = $state();
+  
+  // Load settings from localStorage when bookId changes
+  $effect(() => {
+    if (bookId) {
+      const saved = localStorage.getItem(`lazarus_book_settings_${bookId}`);
+      if (saved) {
+        try {
+          const config = JSON.parse(saved);
+          if (config.editorMode !== undefined) editorMode = config.editorMode;
+          if (config.currentSpread !== undefined) editorCurrentSpread = config.currentSpread;
+          if (config.fullscreen !== undefined) fullscreen = config.fullscreen;
+        } catch (e) {
+          console.error('Error parsing saved book settings:', e);
+        }
+      } else {
+        // Reset to defaults if no saved settings for this book
+        editorMode = 'normal';
+        editorCurrentSpread = 0;
+        fullscreen = false;
+      }
+    }
+  });
+
+  // Save settings to localStorage reactively
+  $effect(() => {
+    if (bookId) {
+      const config = {
+        editorMode,
+        currentSpread: editorCurrentSpread,
+        fullscreen
+      };
+      localStorage.setItem(`lazarus_book_settings_${bookId}`, JSON.stringify(config));
+    }
+  });
+
+  $effect(() => {
+    if (editorMode !== 'book') {
+      lastNonBookMode = editorMode;
+    }
+  });
   let formSave = $state(null);
   let formDirty = $state(false);
   const setFormSave = (fn) => { formSave = fn; };
@@ -202,7 +251,7 @@
       {/if}
       <div class="detail-grid" class:fullscreen class:single-col={mode === 'create'}>
         <div class="left-col">
-          <Panel title={mode === 'create' ? 'Add Book' : 'Edit Book'} icon={BookOpen} stretch={!fullscreen} headerLeft={editHeaderLeft} headerRight={editHeaderRight}>
+          <Panel title={mode === 'create' ? 'Add Book' : 'Edit Book'} icon={BookOpen} stretch={true} headerLeft={editHeaderLeft} headerRight={editHeaderRight}>
             <BookDetailForm {book} {genres} series={series} {seriesBookCounts} {mode} {scrapedData} {fullscreen} onsaveset={setFormSave} onacceptset={setFormAccept} ondirty={handleDirty} onupdate={handleFormUpdate} onediupdate={setEdiState} onretry={setRetry} onrequestclose={onRequestClose} />
           </Panel>
           {#if !fullscreen && mode === 'edit'}
@@ -217,17 +266,67 @@
         <div class="right-col">
           {#if mode === 'edit'}
             {#snippet notesHeaderRight()}
+              {#if editorMode !== 'book'}
+                <div class="mode-group-sm">
+                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'normal'} onclick={() => editorMode = 'normal'} title="Normal">N</button>
+                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'wide'} onclick={() => editorMode = 'wide'} title="Wide">W</button>
+                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'ultrawide'} onclick={() => editorMode = 'ultrawide'} title="Ultra">U</button>
+                </div>
+                <div class="toolbar-divider"></div>
+              {/if}
               <div class="mode-group-sm">
-                <button type="button" class="mode-btn-sm" class:active={editorMode === 'normal'} onclick={() => editorMode = 'normal'} title="Normal">N</button>
-                <button type="button" class="mode-btn-sm" class:active={editorMode === 'wide'} onclick={() => editorMode = 'wide'} title="Wide">W</button>
-                <button type="button" class="mode-btn-sm" class:active={editorMode === 'ultrawide'} onclick={() => editorMode = 'ultrawide'} title="Ultra">U</button>
+                <button type="button" class="mode-btn-sm" disabled={!editorCanUndo} onclick={() => editorTriggerUndo?.()} title="Undo (Ctrl+Z)"><Undo size={16} /></button>
+                <button type="button" class="mode-btn-sm" disabled={!editorCanRedo} onclick={() => editorTriggerRedo?.()} title="Redo (Ctrl+Y)"><Redo size={16} /></button>
               </div>
-              {#if notesDirty}<button type="button" class="panel-header-btn save-btn" onclick={saveNotes} disabled={saving} title="Save notes"><Save size={15} /> {saving ? 'Saving...' : 'Save'}</button>{/if}
-              <button type="button" class="panel-header-btn" onclick={() => { fullscreen = !fullscreen; }} title={fullscreen ? 'Split View' : 'Fullscreen'}>{#if fullscreen}<Minimize2 size={15} />{:else}<Maximize2 size={15} />{/if}</button>
+              <div class="toolbar-divider"></div>
+              <div class="mode-group-sm">
+                <button type="button" class="mode-btn-sm" class:active={editorMode !== 'book'} onclick={() => { if (editorMode === 'book') editorMode = lastNonBookMode; }} title="Single Page View"><FileText size={16} /></button>
+                <button type="button" class="mode-btn-sm" class:active={editorMode === 'book'} onclick={() => { if (editorMode !== 'book') { lastNonBookMode = editorMode; editorMode = 'book'; } }} title="Book Mode"><BookOpen size={16} /></button>
+              </div>
+              <div class="toolbar-divider"></div>
+              {#if editorMode === 'book'}
+                <div class="mode-group-sm">
+                  <button 
+                    type="button" 
+                    class="mode-btn-sm" 
+                    disabled={editorCurrentSpread === 0} 
+                    onclick={() => editorCurrentSpread = Math.max(0, editorCurrentSpread - 1)}
+                    title="Previous Spread"
+                  >
+                    &lt;
+                  </button>
+                  <span class="spread-indicator-header">
+                    {editorCurrentSpread + 1} / {editorTotalSpreads}
+                  </span>
+                  <button 
+                    type="button" 
+                    class="mode-btn-sm" 
+                    disabled={editorCurrentSpread >= editorTotalSpreads - 1} 
+                    onclick={() => editorCurrentSpread = Math.min(editorTotalSpreads - 1, editorCurrentSpread + 1)}
+                    title="Next Spread"
+                  >
+                    &gt;
+                  </button>
+                </div>
+                <div class="toolbar-divider"></div>
+              {/if}
+              {#if notesDirty}<button type="button" class="panel-header-btn save-btn" onclick={saveNotes} disabled={saving} title="Save notes"><Save size={16} /> {saving ? 'Saving...' : 'Save'}</button>{/if}
+              <button type="button" class="panel-header-btn" onclick={() => { fullscreen = !fullscreen; }} title={fullscreen ? 'Split View' : 'Fullscreen'}>{#if fullscreen}<Minimize2 size={16} />{:else}<Maximize2 size={16} />{/if}</button>
             {/snippet}
             <Panel title="Notes" icon={BookOpen} stretch={true} headerRight={notesHeaderRight}>
               <div class="editor-wrap">
-                <DocumentForgeEditor bind:contentMarkdown={editorNotes} theme="black" class="notes-inline-editor" bind:mode={editorMode} />
+                <DocumentForgeEditor 
+                  bind:contentMarkdown={editorNotes} 
+                  theme="black" 
+                  class="notes-inline-editor" 
+                  bind:mode={editorMode}
+                  bind:currentSpread={editorCurrentSpread}
+                  bind:totalSpreads={editorTotalSpreads}
+                  bind:canUndo={editorCanUndo}
+                  bind:canRedo={editorCanRedo}
+                  bind:triggerUndo={editorTriggerUndo}
+                  bind:triggerRedo={editorTriggerRedo}
+                />
               </div>
             </Panel>
           {/if}
@@ -269,10 +368,10 @@
   .detail-grid.fullscreen { grid-template-columns: minmax(0, 20%) minmax(0, 80%); }
   .right-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
   .right-col > :global(.panel.stretch) { flex: 1; min-height: 0; }
-  .detail-grid.fullscreen :global(.panel-title),
-  .detail-grid.fullscreen :global(.panel-header > svg) { display: none; }
-  .detail-grid.fullscreen :global(.panel-header) { min-height: 44px; }
-  .panel-header-btn { display: flex; align-items: center; gap: 4px; background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; padding: 4px 8px; font-family: var(--font-body); font-size: var(--fs-body); min-height: 32px; transition: all 0.15s; box-sizing: border-box; }
+  .detail-grid.fullscreen .left-col :global(.panel-title),
+  .detail-grid.fullscreen .left-col :global(.panel-header > svg) { display: none; }
+  .detail-grid :global(.panel-header) { height: 56px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
+  .panel-header-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; padding: 0 8px; font-family: var(--font-body); font-size: var(--fs-body); height: 32px !important; line-height: 1; transition: all 0.15s; box-sizing: border-box; }
   .panel-header-btn:hover { border-color: var(--cyan-dim); color: var(--text); }
   .panel-header-btn.icon-btn { width: 32px; justify-content: center; padding: 4px; }
   .panel-header-btn.close-btn:hover { border-color: var(--danger); color: var(--danger); }
@@ -315,7 +414,11 @@
   :global(.modal.full:has(.detail-modal-body)) { max-width: 85vw; width: 85vw; height: 85vh; }
 
   .mode-group-sm { display: flex; gap: 2px; margin-right: 6px; }
-  .mode-btn-sm { background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); width: 32px; height: 32px; font-family: var(--font-heading); font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; }
-  .mode-btn-sm:hover { color: var(--cyan); border-color: var(--cyan-dim); }
-  .mode-btn-sm.active { background: var(--bg-elevated); color: var(--cyan); border-color: var(--cyan-dim); }
+  .mode-btn-sm { background: transparent; border: 1px solid var(--border); border-radius: 4px; width: 32px; height: 32px; font-family: var(--font-heading); font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; box-sizing: border-box; }
+  .mode-btn-sm:disabled { color: var(--text-muted); opacity: 0.4; cursor: not-allowed; border-color: var(--border); box-shadow: none; }
+  .mode-btn-sm:not(:disabled) { color: var(--cyan-dim); border-color: var(--border-glow); }
+  .mode-btn-sm:not(:disabled):hover { color: var(--cyan); border-color: var(--cyan); background: rgba(0, 212, 255, 0.05); box-shadow: 0 0 8px var(--cyan-glow); }
+  .mode-btn-sm.active { background: var(--bg-elevated); color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
+  .toolbar-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; align-self: center; }
+  .spread-indicator-header { font-family: var(--font-heading); font-size: var(--fs-small); color: var(--text-dim); display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 </style>

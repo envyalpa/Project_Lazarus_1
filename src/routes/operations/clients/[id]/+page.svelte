@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { X, Pencil, PlusCircle, Trash2, ArrowLeft, ArrowUpDown, BookOpen, Sparkles, History } from '@lucide/svelte';
   import { colorValues } from '$lib/shared/colors.js';
   import DynamicIcon from '$lib/components/operations/DynamicIcon.svelte';
@@ -124,7 +124,6 @@
   function closeAllModals() {
     showEditModal = false;
     showDeleteModal = false;
-    showToolsModal = false;
     showStoryModal = false;
     showStoryDelete = false;
     modalLevel = 'entry';

@@ -96,7 +96,7 @@ export function getByTask(taskId) {
   return stmts.getByTask.all(taskId);
 }
 
-export function getById(id) {
+function getById(id) {
   return stmts.getById.get(id) || null;
 }
 

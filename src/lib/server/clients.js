@@ -12,8 +12,7 @@ const stmts = {
   getById: db.prepare('SELECT * FROM clients WHERE id = ?'),
   create: db.prepare('INSERT INTO clients (name, icon, color, logo, description) VALUES (@name, @icon, @color, @logo, @description)'),
   update: db.prepare('UPDATE clients SET name = @name, icon = @icon, color = @color, logo = @logo, description = @description WHERE id = @id'),
-  remove: db.prepare('DELETE FROM clients WHERE id = ?'),
-  updateCodex: db.prepare("UPDATE clients SET codex_markdown = ? WHERE id = ?")
+  remove: db.prepare('DELETE FROM clients WHERE id = ?')
 };
 
 export function getAll() {
@@ -56,10 +55,4 @@ export function remove(id) {
   return { ...client, projectsCount: 0, tasksCount: 0 };
 }
 
-export function updateCodex(id, codexMarkdown) {
-  const existing = getById(id);
-  if (!existing) return null;
-  stmts.updateCodex.run(codexMarkdown, id);
-  return getById(id);
-}
 

@@ -74,4 +74,3 @@ export function resolveFontId(family, variant) {
   return entry?.id || null;
 }
 
-export { HEADING_FONTS, BODY_FONTS, MONO_FONTS, ALL_FONTS };

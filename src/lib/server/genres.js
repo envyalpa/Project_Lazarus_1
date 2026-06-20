@@ -16,7 +16,6 @@ function getNextIconColor() {
 const stmts = {
   getAll: db.prepare('SELECT * FROM genres ORDER BY name ASC'),
   getById: db.prepare('SELECT * FROM genres WHERE id = ?'),
-  getByName: db.prepare('SELECT * FROM genres WHERE name = ?'),
   create: db.prepare('INSERT INTO genres (name, icon, color, description) VALUES (@name, @icon, @color, @description)'),
   update: db.prepare('UPDATE genres SET name = @name, icon = @icon, color = @color, description = @description WHERE id = @id'),
   remove: db.prepare('DELETE FROM genres WHERE id = ?'),
@@ -27,12 +26,8 @@ export function getAll() {
   return stmts.getAll.all();
 }
 
-export function getById(id) {
+function getById(id) {
   return stmts.getById.get(id) || null;
-}
-
-export function getByName(name) {
-  return stmts.getByName.get(name) || null;
 }
 
 export function create(data) {

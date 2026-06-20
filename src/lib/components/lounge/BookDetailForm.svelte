@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import Modal from '$lib/components/operations/Modal.svelte';
   import { Plus, ChevronLeft, ChevronRight, Check, X, CheckCircle2, Circle } from '@lucide/svelte';
   import DatePicker from '$lib/components/operations/DatePicker.svelte';
@@ -725,7 +725,7 @@
   .series-modal-title { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 1px; margin: 0; display: flex; align-items: center; gap: 8px; }
   .series-modal-label { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 600; color: var(--amber); text-transform: uppercase; letter-spacing: 1px; }
   .series-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-  .minimal-form { display: flex; flex-direction: column; gap: 10px; }
+  .minimal-form { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
   .edit-form-grid.create-mode { gap: 10px; }
 
   .edit-form-grid.create-mode .edit-fields-col { gap: 6px; }

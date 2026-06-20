@@ -29,10 +29,6 @@ export function getAccountBalances() {
   return accounts.getAll();
 }
 
-export function getPeopleBalances() {
-  return peopleModule.getAll();
-}
-
 export function getTopCategories(limit = 5) {
   return db.prepare(`
     SELECT c.id, c.name, c.icon, c.color, COALESCE(SUM(t.amount), 0) as total

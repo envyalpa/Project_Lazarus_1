@@ -4,7 +4,7 @@ import { loadConfig } from './engine-config.js';
 /**
  * Calculates cosine similarity between two float arrays
  */
-export function cosineSimilarity(vecA, vecB) {
+function cosineSimilarity(vecA, vecB) {
   if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
   let dotProduct = 0;
   let normA = 0;
@@ -132,19 +132,6 @@ export function deleteProjectCodexMemory(projectId) {
   }
 }
 
-/**
- * Deletes all client codex section memory entries for a client
- */
-export function deleteClientCodexMemory(clientId) {
-  try {
-    db.prepare(`
-      DELETE FROM memory_embeddings 
-      WHERE entity_type = 'client_codex_section' AND client_id = ?
-    `).run(clientId);
-  } catch (err) {
-    console.error('Failed to delete client codex memory:', err.message);
-  }
-}
 
 /**
  * Splits text into paragraphs/blocks of maximum specified size

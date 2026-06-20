@@ -18,7 +18,7 @@ export function getByAnime(animeId) {
   return stmts.getByAnime.all(animeId);
 }
 
-export function getById(id) {
+function getById(id) {
   return stmts.getById.get(id) || null;
 }
 
