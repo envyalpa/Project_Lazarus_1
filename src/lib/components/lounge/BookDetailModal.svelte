@@ -1,5 +1,5 @@
 <script>
-  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search, LoaderCircle, RefreshCw, Sparkles, FileText, Undo, Redo } from '@lucide/svelte';
+  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search, LoaderCircle, RefreshCw, Sparkles } from '@lucide/svelte';
   import { agentStore } from '$lib/stores/agent.svelte.js';
   import { slide } from 'svelte/transition';
   import { notify } from '$lib/stores/notification.js';
@@ -21,11 +21,7 @@
   let pristineNotes = $state(book?.notes || '');
   let confirmClose = $state(false);
   let saving = $state(false);
-  let editorReady = $state(false);
   let editorMode = $state('normal');
-  let lastNonBookMode = $state('normal');
-  let editorCurrentSpread = $state(0);
-  let editorTotalSpreads = $state(1);
   
   // Undo/Redo Bindings
   let editorCanUndo = $state(false);
@@ -33,15 +29,17 @@
   let editorTriggerUndo = $state();
   let editorTriggerRedo = $state();
   
+  let lastBookId = $state(null);
+  
   // Load settings from localStorage when bookId changes
   $effect(() => {
-    if (bookId) {
+    if (bookId && bookId !== lastBookId) {
+      lastBookId = bookId;
       const saved = localStorage.getItem(`lazarus_book_settings_${bookId}`);
       if (saved) {
         try {
           const config = JSON.parse(saved);
           if (config.editorMode !== undefined) editorMode = config.editorMode;
-          if (config.currentSpread !== undefined) editorCurrentSpread = config.currentSpread;
           if (config.fullscreen !== undefined) fullscreen = config.fullscreen;
         } catch (e) {
           console.error('Error parsing saved book settings:', e);
@@ -49,7 +47,6 @@
       } else {
         // Reset to defaults if no saved settings for this book
         editorMode = 'normal';
-        editorCurrentSpread = 0;
         fullscreen = false;
       }
     }
@@ -60,16 +57,9 @@
     if (bookId) {
       const config = {
         editorMode,
-        currentSpread: editorCurrentSpread,
         fullscreen
       };
       localStorage.setItem(`lazarus_book_settings_${bookId}`, JSON.stringify(config));
-    }
-  });
-
-  $effect(() => {
-    if (editorMode !== 'book') {
-      lastNonBookMode = editorMode;
     }
   });
   let formSave = $state(null);
@@ -158,15 +148,7 @@
   let hasUnsavedChanges = $derived(formDirty || notesDirty);
 
   $effect(() => {
-    if (book && !editorReady) {
-      editorReady = true;
-      pristineNotes = editorNotes;
-    }
-  });
-
-  $effect(() => {
     if (book) {
-      editorNotes = book.notes || '';
       pristineNotes = book.notes || '';
     }
   });
@@ -193,7 +175,7 @@
       if (book) book.notes = editorNotes;
       pristineNotes = editorNotes;
       notify("Notes saved.");
-    } catch {} finally { saving = false; }
+    } catch (e) { console.error('saveNotes failed:', e); } finally { saving = false; }
   }
 
   async function saveAndClose() {
@@ -238,7 +220,7 @@
             </button>
           {/if}
         {/if}
-        <button type="button" class="panel-header-btn save-btn icon-btn" onclick={async () => { await formSave?.(); }} disabled={!hasUnsavedChanges || saving} title={hasUnsavedChanges ? 'Save changes' : 'All saved'}>
+        <button type="button" class="panel-header-btn save-btn icon-btn" onclick={async () => { if (formDirty && formSave) await formSave(); if (notesDirty) await saveNotes(); }} disabled={!hasUnsavedChanges || saving} title={hasUnsavedChanges ? 'Save changes' : 'All saved'}>
           <Save size={16} style={hasUnsavedChanges ? 'color:var(--amber)' : 'color:var(--success)'} />
         </button>
         {#if mode === 'edit'} <button type="button" class="panel-header-btn edit-btn icon-btn" onclick={() => { deleteItem = book; }} title="Delete"><Trash2 size={16} color="var(--danger)" /></button>{/if}
@@ -266,50 +248,6 @@
         <div class="right-col">
           {#if mode === 'edit'}
             {#snippet notesHeaderRight()}
-              {#if editorMode !== 'book'}
-                <div class="mode-group-sm">
-                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'normal'} onclick={() => editorMode = 'normal'} title="Normal">N</button>
-                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'wide'} onclick={() => editorMode = 'wide'} title="Wide">W</button>
-                  <button type="button" class="mode-btn-sm" class:active={editorMode === 'ultrawide'} onclick={() => editorMode = 'ultrawide'} title="Ultra">U</button>
-                </div>
-                <div class="toolbar-divider"></div>
-              {/if}
-              <div class="mode-group-sm">
-                <button type="button" class="mode-btn-sm" disabled={!editorCanUndo} onclick={() => editorTriggerUndo?.()} title="Undo (Ctrl+Z)"><Undo size={16} /></button>
-                <button type="button" class="mode-btn-sm" disabled={!editorCanRedo} onclick={() => editorTriggerRedo?.()} title="Redo (Ctrl+Y)"><Redo size={16} /></button>
-              </div>
-              <div class="toolbar-divider"></div>
-              <div class="mode-group-sm">
-                <button type="button" class="mode-btn-sm" class:active={editorMode !== 'book'} onclick={() => { if (editorMode === 'book') editorMode = lastNonBookMode; }} title="Single Page View"><FileText size={16} /></button>
-                <button type="button" class="mode-btn-sm" class:active={editorMode === 'book'} onclick={() => { if (editorMode !== 'book') { lastNonBookMode = editorMode; editorMode = 'book'; } }} title="Book Mode"><BookOpen size={16} /></button>
-              </div>
-              <div class="toolbar-divider"></div>
-              {#if editorMode === 'book'}
-                <div class="mode-group-sm">
-                  <button 
-                    type="button" 
-                    class="mode-btn-sm" 
-                    disabled={editorCurrentSpread === 0} 
-                    onclick={() => editorCurrentSpread = Math.max(0, editorCurrentSpread - 1)}
-                    title="Previous Spread"
-                  >
-                    &lt;
-                  </button>
-                  <span class="spread-indicator-header">
-                    {editorCurrentSpread + 1} / {editorTotalSpreads}
-                  </span>
-                  <button 
-                    type="button" 
-                    class="mode-btn-sm" 
-                    disabled={editorCurrentSpread >= editorTotalSpreads - 1} 
-                    onclick={() => editorCurrentSpread = Math.min(editorTotalSpreads - 1, editorCurrentSpread + 1)}
-                    title="Next Spread"
-                  >
-                    &gt;
-                  </button>
-                </div>
-                <div class="toolbar-divider"></div>
-              {/if}
               {#if notesDirty}<button type="button" class="panel-header-btn save-btn" onclick={saveNotes} disabled={saving} title="Save notes"><Save size={16} /> {saving ? 'Saving...' : 'Save'}</button>{/if}
               <button type="button" class="panel-header-btn" onclick={() => { fullscreen = !fullscreen; }} title={fullscreen ? 'Split View' : 'Fullscreen'}>{#if fullscreen}<Minimize2 size={16} />{:else}<Maximize2 size={16} />{/if}</button>
             {/snippet}
@@ -320,8 +258,6 @@
                   theme="black" 
                   class="notes-inline-editor" 
                   bind:mode={editorMode}
-                  bind:currentSpread={editorCurrentSpread}
-                  bind:totalSpreads={editorTotalSpreads}
                   bind:canUndo={editorCanUndo}
                   bind:canRedo={editorCanRedo}
                   bind:triggerUndo={editorTriggerUndo}
@@ -412,13 +348,4 @@
   @keyframes edi-spin { to { transform: rotate(360deg); } }
   .edi-spin { animation: edi-spin 1s linear infinite; }
   :global(.modal.full:has(.detail-modal-body)) { max-width: 85vw; width: 85vw; height: 85vh; }
-
-  .mode-group-sm { display: flex; gap: 2px; margin-right: 6px; }
-  .mode-btn-sm { background: transparent; border: 1px solid var(--border); border-radius: 4px; width: 32px; height: 32px; font-family: var(--font-heading); font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; box-sizing: border-box; }
-  .mode-btn-sm:disabled { color: var(--text-muted); opacity: 0.4; cursor: not-allowed; border-color: var(--border); box-shadow: none; }
-  .mode-btn-sm:not(:disabled) { color: var(--cyan-dim); border-color: var(--border-glow); }
-  .mode-btn-sm:not(:disabled):hover { color: var(--cyan); border-color: var(--cyan); background: rgba(0, 212, 255, 0.05); box-shadow: 0 0 8px var(--cyan-glow); }
-  .mode-btn-sm.active { background: var(--bg-elevated); color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
-  .toolbar-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; align-self: center; }
-  .spread-indicator-header { font-family: var(--font-heading); font-size: var(--fs-small); color: var(--text-dim); display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 </style>
