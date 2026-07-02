@@ -144,7 +144,7 @@
 
 {#if showDelete}
   <Modal open={true} title="Delete Course" compact onclose={() => showDelete = false}>
-    <DeleteConfirm title="Delete Course" client={course} onconfirm={handleDeleteCourse} oncancel={() => showDelete = false} />
+    <DeleteConfirm title="Delete Course" item={course} onconfirm={handleDeleteCourse} oncancel={() => showDelete = false} />
   </Modal>
 {/if}
 
@@ -156,7 +156,7 @@
 
 {#if deleteNote}
   <Modal open={true} title="Delete Note" compact onclose={() => deleteNote = null}>
-    <DeleteConfirm title="Delete Note" client={deleteNote} onconfirm={(id) => handleDeleteNote(id)} oncancel={() => deleteNote = null} />
+    <DeleteConfirm title="Delete Note" item={deleteNote} onconfirm={(id) => handleDeleteNote(id)} oncancel={() => deleteNote = null} />
   </Modal>
 {/if}
 

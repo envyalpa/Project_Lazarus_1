@@ -115,7 +115,7 @@
 
 {#if deleteItem}
   <Modal open={true} title="Delete Area" compact onclose={() => deleteItem = null}>
-    <DeleteConfirm title="Delete Area" client={deleteItem} onconfirm={(id) => handleDelete(id)} oncancel={() => deleteItem = null} />
+    <DeleteConfirm title="Delete Area" item={deleteItem} onconfirm={(id) => handleDelete(id)} oncancel={() => deleteItem = null} />
   </Modal>
 {/if}
 

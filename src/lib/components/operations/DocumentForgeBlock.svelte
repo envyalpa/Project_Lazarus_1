@@ -815,6 +815,11 @@
   .block-preview p {
     margin: 0;
   }
+  .block-preview h1,
+  .block-preview h2,
+  .block-preview h3 {
+    margin: 0;
+  }
   .block-preview ul {
     margin: 0;
     padding-left: 20px;

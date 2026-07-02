@@ -1,5 +1,5 @@
-﻿<script>
-  import { Wallet, FileAudio, ArrowRight, BrainCircuit, Palette } from '@lucide/svelte';
+<script>
+  import { Wallet, FileAudio, ArrowRight, BrainCircuit, Palette, Paperclip, ClipboardCheck } from '@lucide/svelte';
 </script>
 
 <div data-section="settings-home" class="settings-home">
@@ -29,6 +29,18 @@
       <p class="card-desc">Choose fonts, adjust base sizes, and preview changes. Includes ITC Conduit, Orbitron, Rajdhani, and more.</p>
       <span class="card-link">Open <ArrowRight size={16} /></span>
     </a>
+    <a href="/settings/attachments" class="module-card">
+      <div class="card-icon"><Paperclip size={32} /></div>
+      <h2 class="card-title">Attachments</h2>
+      <p class="card-desc">View and manage all uploaded images and file attachments.</p>
+      <span class="card-link">Open <ArrowRight size={16} /></span>
+    </a>
+    <a href="/settings/testing-suite" class="module-card">
+      <div class="card-icon"><ClipboardCheck size={32} /></div>
+      <h2 class="card-title">Testing Suite</h2>
+      <p class="card-desc">Run, track, and manage system evaluations and custom test criteria checklists.</p>
+      <span class="card-link">Open <ArrowRight size={16} /></span>
+    </a>
 
   </div>
 </div>
@@ -42,5 +54,5 @@
   .card-icon { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: rgba(0,212,255,0.1); border: 1px solid var(--accent-cyan); border-radius: var(--radius); color: var(--accent-cyan); }
   .card-title { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 600; color: var(--text); margin: 0; }
   .card-desc { font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-dim); margin: 0; line-height: 1.5; }
-  .card-link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-link { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px; }
 </style>

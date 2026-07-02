@@ -366,7 +366,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => { showDeleteModal = false; deletingEntry = null; }}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Time Entry" client={{ name: deletingEntry?.title || deletingEntry?.description || 'Untitled' }} onconfirm={handleDelete} oncancel={() => { showDeleteModal = false; deletingEntry = null; }} />
+        <DeleteConfirm title="Delete Time Entry" item={{ name: deletingEntry?.title || deletingEntry?.description || 'Untitled' }} onconfirm={handleDelete} oncancel={() => { showDeleteModal = false; deletingEntry = null; }} />
       </div>
     </div>
   </div>

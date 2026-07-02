@@ -250,7 +250,7 @@
 
 {#if deleteItem}
   <Modal open={true} noHeader={true} compact onclose={() => { deleteItem = null; }}>
-    <DeleteConfirm title="Delete Anime" client={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={(id) => handleDelete(id)} oncancel={() => { deleteItem = null; }} />
+    <DeleteConfirm title="Delete Anime" item={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={(id) => handleDelete(id)} oncancel={() => { deleteItem = null; }} />
   </Modal>
 {/if}
 

@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import IconPicker from '$lib/components/operations/IconPicker.svelte';
   import ColorPicker from '$lib/components/operations/ColorPicker.svelte';
 
@@ -8,9 +8,16 @@
   let icon = $state(person?.icon || 'User');
   let color = $state(person?.color || '--cyan');
   let show_in_summary = $state(person?.show_in_summary ?? 1);
+  let include_in_split = $state(person?.include_in_split ?? 1);
 
   function submit() {
-    onsave({ name, icon, color, show_in_summary: show_in_summary ? 1 : 0 });
+    onsave({
+      name,
+      icon,
+      color,
+      show_in_summary: show_in_summary ? 1 : 0,
+      include_in_split: include_in_split ? 1 : 0
+    });
   }
 </script>
 
@@ -29,6 +36,15 @@
     <div class="checkbox-row">
       <label class="checkbox-label" class:active={show_in_summary === 1}>
         <input type="checkbox" bind:checked={show_in_summary} /> Show on SitRep & Transactions
+      </label>
+    </div>
+  </label>
+
+  <label class="field">
+    <span class="field-label">Split System</span>
+    <div class="checkbox-row">
+      <label class="checkbox-label" class:active={include_in_split === 1}>
+        <input type="checkbox" bind:checked={include_in_split} /> Include in Expense Splits
       </label>
     </div>
   </label>

@@ -12,6 +12,12 @@
   let { data } = $props();
   let books = $state(data.books);
   let genres = $state(data.genres);
+
+  $effect(() => {
+    books = data.books;
+    genres = data.genres;
+  });
+
   let editingGenre = $state(null);
   let activeBook = $state(undefined);
   let deleteItem = $state(null);
@@ -47,8 +53,7 @@
 
   async function handleDetailClose() {
     activeBook = undefined;
-    const res = await fetch('/lounge/books');
-    if (res.ok) books = await res.json();
+    await invalidate('lounge:data');
   }
 
   async function handleGenreSave(data) {
@@ -129,9 +134,9 @@
 {#if deleteItem}
   <Modal open={true} noHeader={true} compact onclose={() => { deleteItem = null; }}>
     {#if deleteItem.isBulk}
-      <DeleteConfirm title="Delete Genres" client={{ name: `${deleteItem.names.length} genres`, bookCount: deleteItem.bookCount, ids: deleteItem.ids }} {detailText} onconfirm={() => { for (const id of deleteItem.ids) handleGenreDelete({ id }); deleteItem = null; }} oncancel={() => { deleteItem = null; }} />
+      <DeleteConfirm title="Delete Genres" item={{ name: `${deleteItem.names.length} genres`, bookCount: deleteItem.bookCount, ids: deleteItem.ids }} {detailText} onconfirm={() => { for (const id of deleteItem.ids) handleGenreDelete({ id }); deleteItem = null; }} oncancel={() => { deleteItem = null; }} />
     {:else}
-      <DeleteConfirm title="Delete Genre" client={{ name: deleteItem.name, id: deleteItem.id, bookCount: deleteItem.bookCount }} {detailText} onconfirm={(id) => { handleGenreDelete({ id, name: deleteItem.name }); deleteItem = null; }} oncancel={() => { deleteItem = null; }} />
+      <DeleteConfirm title="Delete Genre" item={{ name: deleteItem.name, id: deleteItem.id, bookCount: deleteItem.bookCount }} {detailText} onconfirm={(id) => { handleGenreDelete({ id, name: deleteItem.name }); deleteItem = null; }} oncancel={() => { deleteItem = null; }} />
     {/if}
   </Modal>
 {/if}

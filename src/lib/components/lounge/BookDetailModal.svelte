@@ -171,11 +171,20 @@
   async function saveNotes() {
     saving = true;
     try {
-      await fetch(`/lounge/books/${bookId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: editorNotes }) });
+      const res = await fetch(`/lounge/books/${bookId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: editorNotes }) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server responded with ${res.status}`);
+      }
       if (book) book.notes = editorNotes;
       pristineNotes = editorNotes;
       notify("Notes saved.");
-    } catch (e) { console.error('saveNotes failed:', e); } finally { saving = false; }
+    } catch (e) {
+      console.error('saveNotes failed:', e);
+      notify("Error saving notes: " + e.message);
+    } finally {
+      saving = false;
+    }
   }
 
   async function saveAndClose() {
@@ -289,7 +298,7 @@
 
 {#if deleteItem}
   <Modal open={true} noHeader={true} compact onclose={() => { deleteItem = null; }}>
-    <DeleteConfirm title="Delete Book" client={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={handleDelete} oncancel={() => { deleteItem = null; }} />
+    <DeleteConfirm title="Delete Book" item={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={handleDelete} oncancel={() => { deleteItem = null; }} />
   </Modal>
 {/if}
 

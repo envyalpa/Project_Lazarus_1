@@ -2,7 +2,8 @@
   import { X, Pencil, Plus, Link, Trash2 } from '@lucide/svelte';
   import DatePicker from './DatePicker.svelte';
   import DocumentForgeEditor from './DocumentForgeEditor.svelte';
-  import LinkIcon from './LinkIcon.svelte';
+  import DynamicIcon from './DynamicIcon.svelte';
+  import { getIconForUrl } from '$lib/links.js';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import { notify } from '$lib/stores/notification.js';
 
@@ -164,7 +165,7 @@
         <div class="box-label">Links</div>
         {#each links as link, i}
           <div class="link-input-group">
-            <span class="link-input-icon">{#if link}<LinkIcon url={link} size={16} />{:else}<Link size={16} color="var(--text-dim)" />{/if}</span>
+            <span class="link-input-icon">{#if link}<DynamicIcon name={getIconForUrl(link)} size={16} color="var(--accent-cyan)" />{:else}<Link size={16} color="var(--text-dim)" />{/if}</span>
             <input type="url" class="link-inner-input" placeholder="Paste URL..." value={link} oninput={(e) => updateLink(i, e.target.value)} />
             <button type="button" class="link-group-btn remove-btn" onclick={() => removeLink(i)} title="Remove"><X size={14} /></button>
             {#if i === links.length - 1}
@@ -215,7 +216,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => { showTaskDelete = false; deletingTask = null; }}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Task" client={{ name: deletingTask?.title }} warning={deletingTask?.sub_tasks?.length > 0 ? `This task has ${deletingTask.sub_tasks.length} sub-task(s) which will also be deleted.` : ''} onconfirm={confirmTaskDelete} oncancel={() => { showTaskDelete = false; deletingTask = null; }} />
+        <DeleteConfirm title="Delete Task" item={{ name: deletingTask?.title }} warning={deletingTask?.sub_tasks?.length > 0 ? `This task has ${deletingTask.sub_tasks.length} sub-task(s) which will also be deleted.` : ''} onconfirm={confirmTaskDelete} oncancel={() => { showTaskDelete = false; deletingTask = null; }} />
       </div>
     </div>
   </div>

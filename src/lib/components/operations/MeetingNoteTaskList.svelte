@@ -87,7 +87,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => { showTaskDelete = false; deletingTask = null; }}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Task" client={{ name: deletingTask?.title }} warning={deletingTask?.sub_tasks?.length > 0 ? `This task has ${deletingTask.sub_tasks.length} sub-task(s) which will also be deleted.` : ''} onconfirm={confirmTaskDelete} oncancel={() => { showTaskDelete = false; deletingTask = null; }} />
+        <DeleteConfirm title="Delete Task" item={{ name: deletingTask?.title }} warning={deletingTask?.sub_tasks?.length > 0 ? `This task has ${deletingTask.sub_tasks.length} sub-task(s) which will also be deleted.` : ''} onconfirm={confirmTaskDelete} oncancel={() => { showTaskDelete = false; deletingTask = null; }} />
       </div>
     </div>
   </div>

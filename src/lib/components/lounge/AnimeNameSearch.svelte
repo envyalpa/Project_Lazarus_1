@@ -1,7 +1,7 @@
 ﻿<script>
   import { Search, LoaderCircle, Check, X } from '@lucide/svelte';
 
-  let { onscraped } = $props();
+  let { onscraped, renderResultsExternal = false, onsearchresults, onsearchloading, onsearcherror } = $props();
 
   let searchName = $state('');
   let searchLoading = $state(false);
@@ -16,6 +16,7 @@
     searchError = '';
     searchResults = [];
     showResults = false;
+    if (renderResultsExternal) onsearchloading?.(true);
     try {
       const res = await fetch('/api/scrape/anime', {
         method: 'POST',
@@ -26,11 +27,21 @@
       const data = await res.json();
       searchResults = data.results || [];
       showResults = searchResults.length > 0;
-      if (searchResults.length === 0) searchError = 'No results found. Try a different name.';
+      if (renderResultsExternal) {
+        onsearchloading?.(false);
+        if (searchResults.length > 0) {
+          onsearchresults?.(searchResults);
+        } else {
+          onsearcherror?.('No results found. Try a different name.');
+        }
+      } else {
+        if (searchResults.length === 0) searchError = 'No results found. Try a different name.';
+      }
     } catch (e) {
-      searchError = e.message;
+      if (renderResultsExternal) { onsearcherror?.(e.message); } else { searchError = e.message; }
+      if (renderResultsExternal) onsearchloading?.(false);
     } finally {
-      searchLoading = false;
+      if (!renderResultsExternal) searchLoading = false;
     }
   }
 
@@ -88,29 +99,31 @@
   </button>
 </div>
 
-{#if searchError}
-  <div class="scraper-error">
-    <X size={14} />
-    <span>{searchError}</span>
-  </div>
-{/if}
+{#if !renderResultsExternal}
+  {#if searchError}
+    <div class="scraper-error">
+      <X size={14} />
+      <span>{searchError}</span>
+    </div>
+  {/if}
 
-{#if showResults && searchResults.length > 0}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="search-results" data-section="search-results" onclick={closeResults}>
-    {#each searchResults as r (r.cover_url + r.title)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="result-item" role="button" tabindex="0"
-        onclick={(e) => { e.stopPropagation(); handleSelect(r); }}
-        onkeydown={(e) => { if (e.key === 'Enter') handleSelect(r); }}>
-        <img src={r.cover_url} alt="" class="result-thumb" />
-        <div class="result-info">
-          <span class="result-title">{r.title}</span>
-          <span class="result-source">{r.source}</span>
+  {#if showResults && searchResults.length > 0}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="search-results" data-section="search-results" onclick={closeResults}>
+      {#each searchResults as r (r.cover_url + r.title)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="result-item" role="button" tabindex="0"
+          onclick={(e) => { e.stopPropagation(); handleSelect(r); }}
+          onkeydown={(e) => { if (e.key === 'Enter') handleSelect(r); }}>
+          <img src={r.cover_url} alt="" class="result-thumb" />
+          <div class="result-info">
+            <span class="result-title">{r.title}</span>
+            <span class="result-source">{r.source}</span>
+          </div>
         </div>
-      </div>
-    {/each}
-  </div>
+      {/each}
+    </div>
+  {/if}
 {/if}
 
 <style>

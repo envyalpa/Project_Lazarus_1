@@ -1,13 +1,18 @@
-﻿<script>
+<script>
   import { ArrowDown, ArrowUp, GitBranch, Landmark } from '@lucide/svelte';
   import { colorValues } from '$lib/shared/colors.js';
   import DynamicIcon from '$lib/components/operations/DynamicIcon.svelte';
 
   let { accounts = [], people = [] } = $props();
 
+  const orderMap = { 'Me': 0, 'Wife': 1, 'Junior': 2, 'Sister': 3, 'Family': 4 };
+  let sortedPeople = $derived(
+    [...people].sort((a, b) => (orderMap[a.name] ?? 99) - (orderMap[b.name] ?? 99))
+  );
+
   let all = $derived([
     ...accounts.map(a => ({ ...a, kind: 'account' })),
-    ...people.map(p => ({ ...p, kind: 'person' }))
+    ...sortedPeople.map(p => ({ ...p, kind: 'person' }))
   ]);
 
   let colTemplate = $derived(`repeat(${all.length}, 1fr)`);
@@ -20,6 +25,7 @@
 
   function isPositive(item) {
     if (item.kind === 'person') {
+      if (item.include_in_split === 0) return true;
       const totalBal = item.paidByAmount - item.paidBackDirect - item.paidBackSplit;
       return totalBal >= 0;
     }
@@ -54,15 +60,22 @@
       <div class="card-name">{item.name}</div>
 
       {#if item.kind === 'person'}
-        {@const totalBalance = item.paidByAmount - item.paidBackDirect - item.paidBackSplit}
-        <div class="card-value-main" class:negative={totalBalance < 0}>
+        {@const isDependent = item.include_in_split === 0}
+        {@const totalBalance = isDependent ? item.balance : (item.paidByAmount - item.paidBackDirect - item.paidBackSplit)}
+        <div class="card-value-main" class:negative={!isDependent && totalBalance < 0}>
           <span class="currency-symbol">₹</span>{fmt(totalBalance)}
         </div>
         <div class="card-value-line"></div>
         <div class="card-breakdown">
-          <div class="bd-box green"><span class="bd-icon"><ArrowDown size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidByAmount)}</span></div>
-          <div class="bd-box red"><span class="bd-icon"><ArrowUp size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidBackDirect)}</span></div>
-          <div class="bd-box amber"><span class="bd-icon"><GitBranch size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidBackSplit)}</span></div>
+          {#if isDependent}
+            <div class="bd-box green" title="Total Given"><span class="bd-icon"><ArrowDown size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.totalSpent)}</span></div>
+            <div class="bd-box red" title="Total Taken"><span class="bd-icon"><ArrowUp size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidBackDirect)}</span></div>
+            <div class="bd-box amber" title="Total from Split"><span class="bd-icon"><GitBranch size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.contributions?.Me || 0)}</span></div>
+          {:else}
+            <div class="bd-box green" title="Paid by"><span class="bd-icon"><ArrowDown size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidByAmount)}</span></div>
+            <div class="bd-box red" title="Paid back"><span class="bd-icon"><ArrowUp size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidBackDirect)}</span></div>
+            <div class="bd-box amber" title="Via split"><span class="bd-icon"><GitBranch size={12} /></span><span class="bd-amount"><span class="currency-symbol">₹</span>{fmt(item.paidBackSplit)}</span></div>
+          {/if}
         </div>
       {:else if item.type === 'loan'}
         <div class="card-value-main" class:negative={!isPositive(item)}>

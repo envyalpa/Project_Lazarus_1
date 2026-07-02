@@ -1,31 +1,15 @@
 import { json } from '@sveltejs/kit';
-import { getById, update, remove } from '$lib/server/academy/areas.js';
+import { detailHandlers } from '$lib/server/crud.js';
+import * as areaStore from '$lib/server/academy/areas.js';
 import { create as createCourse } from '$lib/server/academy/courses.js';
 import { create as createNote, update as updateNote, remove as removeNote } from '$lib/server/academy/notes.js';
 
-export async function GET({ params }) {
-  const area = getById(params.id);
-  if (!area) return json({ error: 'Not found' }, { status: 404 });
-  return json(area);
-}
-
-export async function PUT({ params, request }) {
-  const data = await request.json();
-  const area = update(params.id, data);
-  if (!area) return json({ error: 'Not found' }, { status: 404 });
-  return json(area);
-}
-
-export async function DELETE({ params }) {
-  const area = remove(params.id);
-  if (!area) return json({ error: 'Not found' }, { status: 404 });
-  return json(area);
-}
+export const { GET, PUT, DELETE } = detailHandlers(areaStore);
 
 export async function POST({ params, request }) {
   const data = await request.json();
   if (data.action === 'delete') {
-    const area = remove(data.id);
+    const area = areaStore.remove(data.id);
     if (!area) return json({ error: 'Not found' }, { status: 404 });
     return json(area);
   }

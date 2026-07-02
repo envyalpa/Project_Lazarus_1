@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { ArrowLeft, TrendingUp, TrendingDown } from '@lucide/svelte';
   import { colorValues } from '$lib/shared/colors.js';
   import DynamicIcon from '$lib/components/operations/DynamicIcon.svelte';
@@ -9,13 +9,14 @@
   let initialTransactions = $derived(data.transactions);
   let categories = $derived(data.categories);
   let accounts = $derived(data.accounts);
+  let people = $derived(data.people);
 
   function fmt(val) {
     return Math.abs(val).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   }
 
-  let totalBalance = $derived(person.paidByAmount - person.paidBackDirect - person.paidBackSplit);
-  let isPositive = $derived(totalBalance >= 0);
+  let totalBalance = $derived(person.include_in_split === 1 ? (person.paidByAmount - person.paidBackDirect - person.paidBackSplit) : person.balance);
+  let isPositive = $derived(person.include_in_split === 1 ? totalBalance >= 0 : true);
 </script>
 
 <div data-section="person-detail" class="page">
@@ -38,9 +39,21 @@
         <span class="balance-value" class:negative={!isPositive}><span class="currency-symbol">₹</span>{fmt(totalBalance)}</span>
       </div>
       <div class="balance-breakdown">
-        <span class="bd-item"><span class="bd-label">Paid by:</span> <span class="currency-symbol">₹</span>{fmt(person.paidByAmount)}</span>
-        <span class="bd-item"><span class="bd-label">Paid back:</span> <span class="currency-symbol">₹</span>{fmt(person.paidBackDirect)}</span>
-        <span class="bd-item"><span class="bd-label">Via split:</span> <span class="currency-symbol">₹</span>{fmt(person.paidBackSplit)}</span>
+        {#if person.include_in_split === 0}
+          <span class="bd-title" style="text-align: right; color: var(--text-dim); font-size: var(--fs-small); font-weight: 600; margin-bottom: 4px;">CONTRIBUTIONS:</span>
+          {#each Object.entries(person.contributions || {}) as [contributor, amount]}
+            {#if amount > 0}
+              <span class="bd-item"><span class="bd-label">{contributor}:</span> <span class="currency-symbol">₹</span>{fmt(amount)}</span>
+            {/if}
+          {/each}
+          {#if Object.keys(person.contributions || {}).length === 0}
+            <span class="bd-item" style="color: var(--text-muted); font-style: italic;">No contributions yet</span>
+          {/if}
+        {:else}
+          <span class="bd-item"><span class="bd-label">Paid by:</span> <span class="currency-symbol">₹</span>{fmt(person.paidByAmount)}</span>
+          <span class="bd-item"><span class="bd-label">Paid back:</span> <span class="currency-symbol">₹</span>{fmt(person.paidBackDirect)}</span>
+          <span class="bd-item"><span class="bd-label">Via split:</span> <span class="currency-symbol">₹</span>{fmt(person.paidBackSplit)}</span>
+        {/if}
       </div>
     </div>
   </div>
@@ -51,7 +64,7 @@
     {initialTransactions}
     {accounts}
     {categories}
-    people={[person]}
+    {people}
   />
 </div>
 

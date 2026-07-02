@@ -1,7 +1,7 @@
 ﻿<script>
   import { TriangleAlert, X } from '@lucide/svelte';
 
-  let { client = null, onconfirm, oncancel, title = 'Delete', warning = '', detailText = '' } = $props();
+  let { item = null, onconfirm, oncancel, title = 'Delete', warning = '', detailText = '' } = $props();
 </script>
 
 <div data-section="delete-confirm" class="confirm-box">
@@ -10,22 +10,22 @@
   </div>
   <h3 data-label="confirm-title" class="confirm-title">{title}</h3>
   <p data-label="confirm-message" class="confirm-message">
-    Are you sure you want to delete <strong>{client?.name}</strong>?<br>
+    Are you sure you want to delete <strong>{item?.name}</strong>?<br>
     This will permanently remove this item and all associated data.
   </p>
   {#if warning}
     <p class="warning-text">{warning}</p>
   {/if}
-  {#if client?.projectsCount !== undefined || client?.tasksCount !== undefined || client?.bookCount !== undefined}
+  {#if item?.projectsCount !== undefined || item?.tasksCount !== undefined || item?.bookCount !== undefined}
     <div data-label="confirm-counts" class="confirm-counts">
-      {#if client?.bookCount !== undefined}
-        <span class="count-badge">Books: {client.bookCount}</span>
+      {#if item?.bookCount !== undefined}
+        <span class="count-badge">Books: {item.bookCount}</span>
       {/if}
-      {#if client?.projectsCount !== undefined}
-        <span class="count-badge">Projects: {client.projectsCount}</span>
+      {#if item?.projectsCount !== undefined}
+        <span class="count-badge">Projects: {item.projectsCount}</span>
       {/if}
-      {#if client?.tasksCount !== undefined}
-        <span class="count-badge">Tasks: {client.tasksCount}</span>
+      {#if item?.tasksCount !== undefined}
+        <span class="count-badge">Tasks: {item.tasksCount}</span>
       {/if}
     </div>
   {/if}
@@ -34,7 +34,7 @@
   {/if}
   <div class="confirm-actions">
     <button class="btn btn-cancel" onclick={oncancel}>Cancel</button>
-    <button class="btn btn-delete" onclick={() => onconfirm?.(client.id)}>Delete</button>
+    <button class="btn btn-delete" onclick={() => onconfirm?.(item.id)}>Delete</button>
   </div>
 </div>
 

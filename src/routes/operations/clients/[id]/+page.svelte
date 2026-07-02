@@ -535,7 +535,7 @@
         </button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Client" client={client} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
+        <DeleteConfirm title="Delete Client" item={client} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
       </div>
     </div>
   </div>
@@ -593,7 +593,7 @@
         </button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Entry" client={{ name: deletingEntry?.title }} onconfirm={handleStoryDelete} oncancel={() => { showStoryDelete = false; deletingEntry = null; }} />
+        <DeleteConfirm title="Delete Entry" item={{ name: deletingEntry?.title }} onconfirm={handleStoryDelete} oncancel={() => { showStoryDelete = false; deletingEntry = null; }} />
       </div>
     </div>
   </div>

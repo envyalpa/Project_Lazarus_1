@@ -1,6 +1,7 @@
 ﻿<script>
   import { Pencil, Trash2, ExternalLink } from '@lucide/svelte';
-  import LinkIcon from './LinkIcon.svelte';
+  import DynamicIcon from './DynamicIcon.svelte';
+  import { getIconForUrl } from '$lib/links.js';
 
   let { entries = [], onedit, ondelete, clientId } = $props();
 
@@ -58,7 +59,7 @@
               {#if entry.links && entry.links.length > 0}
                 {#each entry.links as link}
                   <a href={link.url} target="_blank" rel="noopener" class="meta-icon-link" title={link.url}>
-                    <LinkIcon url={link.url} size={14} />
+                    <DynamicIcon name={getIconForUrl(link.url)} size={14} color="var(--accent-cyan)" />
                   </a>
                 {/each}
               {/if}

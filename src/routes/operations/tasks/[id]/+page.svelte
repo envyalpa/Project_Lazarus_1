@@ -7,14 +7,13 @@
   import TimeEntriesTab from '$lib/components/operations/TimeEntriesTab.svelte';
   import DatePicker from '$lib/components/operations/DatePicker.svelte';
   import { notify } from '$lib/stores/notification.js';
-  import LinkIcon from '$lib/components/operations/LinkIcon.svelte';
   import { getIconForUrl } from '$lib/links.js';
 
   let { data: initial } = $props();
   let task = $state(initial.task);
   let clients = $state(initial.clients || []);
   let files = $state(initial.files || []);
-  let activeTab = $state('notes');
+  let activeTab = $state('sub-tasks');
   let showDeleteModal = $state(false);
 
   let newLinkName = $state('');
@@ -519,7 +518,7 @@
             {#each files as f}
               <div class="link-item-row">
                 <a href={f.link} target="_blank" rel="noopener" class="link-item-anchor">
-                  <LinkIcon url={f.link} size={14} />
+                  <DynamicIcon name={getIconForUrl(f.link)} size={14} color="var(--accent-cyan)" />
                   <span>{f.file_name.replace(`[Task: ${task.title}] `, '')}</span>
                 </a>
                 <button type="button" class="delete-link-btn" onclick={() => handleDeleteLink(f.id)} title="Remove Link">
@@ -536,16 +535,14 @@
     <div class="task-content-panel">
       <div class="task-tabs">
         <div data-section="task-tabs" class="tab-bar">
-          <button type="button" data-nav="notes" class="tab-btn" class:active={activeTab === 'notes'} onclick={() => activeTab = 'notes'}>Notes</button>
           <button type="button" data-nav="sub-tasks" class="tab-btn" class:active={activeTab === 'sub-tasks'} onclick={() => activeTab = 'sub-tasks'}>Sub-Tasks ({subTasks.length})</button>
+          <button type="button" data-nav="notes" class="tab-btn" class:active={activeTab === 'notes'} onclick={() => activeTab = 'notes'}>Notes</button>
           <button type="button" data-nav="time-entries" class="tab-btn" class:active={activeTab === 'time-entries'} onclick={() => activeTab = 'time-entries'}>Time Entries</button>
         </div>
       </div>
 
       <div data-label="tab-content" class="tab-content">
-        {#if activeTab === 'notes'}
-          <TaskNotesEditor taskId={task.id} bind:notes={notesContent} />
-        {:else if activeTab === 'sub-tasks'}
+        {#if activeTab === 'sub-tasks'}
           <div data-section="subtasks-manager" class="subtasks-manager">
             <div class="subtasks-list-container">
               {#each subTasks as st}
@@ -597,6 +594,8 @@
               <button type="submit" class="btn btn-save add-subtask-btn" disabled={!newSubTaskTitle.trim()}>+ Add Sub-Task</button>
             </form>
           </div>
+        {:else if activeTab === 'notes'}
+          <TaskNotesEditor taskId={task.id} bind:notes={notesContent} />
         {:else}
           <TimeEntriesTab taskId={task.id} clientId={task.client_id} clients={clients} />
         {/if}
@@ -613,7 +612,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => showDeleteModal = false}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Task" client={{ name: task?.title }} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
+        <DeleteConfirm title="Delete Task" item={{ name: task?.title }} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
       </div>
     </div>
   </div>
@@ -624,27 +623,27 @@
 
 <style>
   .details-page { flex: 1; display: flex; flex-direction: column; gap: 0; margin-top: 0; border: 1px solid var(--border-glow); border-radius: var(--radius); overflow: hidden; }
-  .details-back { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-surface); border-bottom: 1px solid var(--border-glow); gap: 10px; }
-  .back-link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: var(--fs-body); font-weight: 500; color: var(--text-dim); text-decoration: none; transition: color 0.2s; white-space: nowrap; }
+  .details-back { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--bg-surface); border-bottom: 1px solid var(--border-glow); gap: 10px; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 500; color: var(--text-dim); text-decoration: none; transition: color 0.2s; white-space: nowrap; padding: 5px 10px; line-height: 1; }
   .back-link:hover { color: var(--cyan); }
   .back-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .task-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 10px; background: var(--bg-panel); border-bottom: 1px solid var(--border-glow); }
   .header-left { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
   .header-info { min-width: 0; flex: 1; }
   .task-title { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 700; color: var(--text); letter-spacing: 0.5px; margin: 0; }
-  .badge-status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 700; padding: 3px 8px; border-radius: var(--radius); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
-  .badge-link { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; padding: 3px 10px; border-radius: var(--radius); text-decoration: none; line-height: 1; }
+  .badge-status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 700; padding: 5px 10px; border-radius: var(--radius); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
+  .badge-link { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; padding: 5px 10px; border-radius: var(--radius); text-decoration: none; line-height: 1; }
   .badge-link:hover { text-decoration: underline; }
   .badge-client { background: rgba(0, 212, 255, 0.12); color: var(--cyan); }
   .badge-project { background: rgba(168, 85, 247, 0.12); color: var(--purple); }
   .badge-parent { background: rgba(0, 212, 255, 0.08); color: var(--cyan); border: 1px solid var(--border-glow); }
-  .badge-date { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; padding: 3px 8px; border-radius: var(--radius); background: rgba(255,255,255,0.06); color: var(--text-dim); line-height: 1; }
-  .badge-phase { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 700; padding: 3px 8px; border-radius: var(--radius); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
+  .badge-date { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; padding: 5px 10px; border-radius: var(--radius); background: rgba(255,255,255,0.06); color: var(--text-dim); line-height: 1; }
+  .badge-phase { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 700; padding: 5px 10px; border-radius: var(--radius); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
   
   .property-info-note { display: flex; align-items: center; gap: 6px; font-family: var(--font-caption); font-size: var(--fs-caption); color: var(--text-muted); font-style: italic; background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.2); border-radius: var(--radius); padding: 8px 12px; }
   .warning-icon { color: var(--danger); }
-  .source-label { font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-muted); font-style: italic; }
-  .source-placeholder { font-family: var(--font-body); font-size: var(--fs-body); font-weight: 500; padding: 3px 10px; border-radius: var(--radius); background: rgba(255,255,255,0.04); color: var(--text-muted); font-style: italic; display: inline-block; }
+  .source-label { font-family: var(--font-caption); font-size: var(--fs-caption); color: var(--text-muted); font-style: italic; display: inline-flex; align-items: center; padding: 5px 10px; line-height: 1; }
+  .source-placeholder { font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 500; padding: 5px 10px; border-radius: var(--radius); background: rgba(255,255,255,0.04); color: var(--text-muted); font-style: italic; display: inline-flex; align-items: center; line-height: 1; }
   .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .action-btn { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; background: none; border: 1px solid var(--text-dim); border-radius: var(--radius); cursor: pointer; transition: all 0.2s; }
   .save-btn { color: var(--success); }
@@ -653,19 +652,19 @@
   .delete-btn:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--danger); }
 
   .task-details-body { display: flex; flex: 1; min-height: 0; background: var(--bg-surface); }
-  .task-properties-panel { width: 25%; border-right: 1px solid var(--border-glow); padding: 0; background: #060b16; display: flex; flex-direction: column; gap: 0; overflow-y: auto; }
+  .task-properties-panel { width: 25%; border-right: 1px solid var(--border-glow); padding: 0; background: var(--bg-nav); display: flex; flex-direction: column; gap: 0; overflow-y: auto; }
   .task-content-panel { width: 75%; display: flex; flex-direction: column; min-height: 0; }
 
   .property-item { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
   .property-item:last-child { border-bottom: none; }
   .property-label { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--cyan); }
-  .property-select { width: 100%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-body); cursor: pointer; transition: all 0.15s; }
+  .property-select { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-body); cursor: pointer; transition: all 0.15s; }
   .property-select:focus { border-color: var(--cyan); outline: none; box-shadow: inset 0 0 5px var(--cyan-glow); }
 
   .title-inline-input { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 700; color: var(--text); background: var(--bg-surface); border: 1px solid var(--border-glow); border-radius: var(--radius); padding: 4px 8px; width: 100%; outline: none; box-shadow: 0 0 10px var(--cyan-glow); }
   .clickable-title { cursor: pointer; border: 1px solid transparent; border-radius: var(--radius); padding: 4px 8px; margin: -4px -8px; transition: all 0.2s; }
   .clickable-title:hover { border-color: var(--border-glow); background: rgba(0, 212, 255, 0.05); }
-  .property-textarea { width: 100%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-body); min-height: 100px; resize: vertical; transition: all 0.15s; }
+  .property-textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-body); min-height: 100px; resize: vertical; transition: all 0.15s; }
   .property-textarea:focus { border-color: var(--cyan); outline: none; box-shadow: inset 0 0 5px var(--cyan-glow); }
 
   .subtasks-manager { display: flex; flex-direction: column; gap: 16px; width: 100%; }

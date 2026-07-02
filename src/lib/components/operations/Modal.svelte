@@ -64,14 +64,17 @@
   }
 
   .modal.full {
-    max-width: 85vw;
-    width: 85vw;
-    max-height: 92vh;
+    max-width: var(--modal-full-width, 85vw);
+    width: var(--modal-full-width, 85vw);
+    height: var(--modal-full-height, auto);
+    max-height: var(--modal-full-height, 92vh);
   }
 
   .modal.narrow {
-    max-width: min(53.125vw, 1000px);
-    width: min(53.125vw, 1000px);
+    max-width: var(--modal-narrow-width, min(53.125vw, 1000px));
+    width: var(--modal-narrow-width, min(53.125vw, 1000px));
+    height: var(--modal-narrow-height, auto);
+    max-height: var(--modal-narrow-height, 85vh);
   }
 
   .modal.compact {

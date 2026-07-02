@@ -142,7 +142,7 @@
     <div data-section="modal" class="modal modal-delete compact" role="dialog" aria-modal="true">
       <div data-label="modal-body" class="modal-body">
         <DeleteConfirm
-          client={{ name: deleteTarget.name, id: deleteTarget.id }}
+          item={{ name: deleteTarget.name, id: deleteTarget.id }}
           title="Delete Account"
           onconfirm={handleDelete}
           oncancel={closeDelete}

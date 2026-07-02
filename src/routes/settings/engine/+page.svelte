@@ -43,21 +43,10 @@
   let fileSize = $derived(activeItem?.fileSize || 0);
   let elapsed = $derived(transcriptionStore.elapsed);
   
-  let stagePercent = $derived({
-    upload: status === 'uploading' ? 50 : (status === 'transcribing' || status === 'complete' ? 100 : 0),
-    transcribe: activeItem?.progress || 0,
-    llm: 0,
-    cleanup: 0
+  let overallPercent = $derived.by(() => {
+    if (status === 'complete') return 100;
+    return activeItem?.progress || 0;
   });
-
-  let stageLabels = $derived({
-    upload: status === 'uploading' ? 'Uploading file...' : (status === 'ready' ? '' : 'Upload complete'),
-    transcribe: status === 'transcribing' ? `Processing chunk ${activeItem?.currentChunkIndex + 1} of ${activeItem?.totalChunks}` : (status === 'complete' ? 'Transcription complete' : ''),
-    llm: '',
-    cleanup: ''
-  });
-
-  let infoText = $derived(activeItem ? `Processing chunk ${activeItem.currentChunkIndex + 1} of ${activeItem.totalChunks}` : '');
   let error = $derived(activeItem?.error || '');
   let transcription = $derived(transcriptionStore.viewedItem ? transcriptionStore.viewedItem.transcription : (activeItem?.transcription || ''));
   let segments = $derived(transcriptionStore.viewedItem ? transcriptionStore.viewedItem.segments : (activeItem?.segments || []));
@@ -175,7 +164,7 @@
     </div>
     <div data-section="file-upload" class="upload-section">
       {#if status === 'uploading' || status === 'transcribing' || status === 'complete'}
-        <TranscriptionProgress {status} {fileName} {fileSize} {stagePercent} {stageLabels} {elapsed} {infoText} llmEnabled={false} />
+        <TranscriptionProgress {status} {fileName} {fileSize} {elapsed} percent={overallPercent} />
       {:else}
         <div class="dropzone" class:dragging={dragging} role="button" tabindex="0"
           ondragover={(e) => { e.preventDefault(); dragging = true; }}

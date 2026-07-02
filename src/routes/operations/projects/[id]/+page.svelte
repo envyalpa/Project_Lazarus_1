@@ -528,7 +528,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => showDeleteModal = false}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Project" client={{ name: project?.name }} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
+        <DeleteConfirm title="Delete Project" item={{ name: project?.name }} onconfirm={handleDelete} oncancel={() => showDeleteModal = false} />
       </div>
     </div>
   </div>
@@ -584,7 +584,7 @@
         <button type="button" data-label="modal-close" class="close-btn" onclick={() => { showStoryDelete = false; deletingEntry = null; }}><X size={18} /></button>
       </div>
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm title="Delete Entry" client={{ name: deletingEntry?.title }} onconfirm={handleStoryDelete} oncancel={() => { showStoryDelete = false; deletingEntry = null; }} />
+        <DeleteConfirm title="Delete Entry" item={{ name: deletingEntry?.title }} onconfirm={handleStoryDelete} oncancel={() => { showStoryDelete = false; deletingEntry = null; }} />
       </div>
     </div>
   </div>

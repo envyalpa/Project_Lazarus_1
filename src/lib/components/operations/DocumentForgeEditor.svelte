@@ -4,8 +4,6 @@
     Heading1,
     Heading2,
     Heading3,
-    Heading4,
-    Heading5,
     Bold,
     Italic,
     Underline,
@@ -26,7 +24,9 @@
     TriangleAlert,
     ShieldAlert,
     Link2,
-    Trash2
+    Trash2,
+    Undo,
+    Redo
   } from '@lucide/svelte';
   import DocumentForgeCropModal from './DocumentForgeCropModal.svelte';
 
@@ -35,8 +35,6 @@
     class: className = '', 
     theme = 'black',
     mode = $bindable('normal'),
-    currentSpread = $bindable(0),
-    totalSpreads = $bindable(1),
     canUndo = $bindable(false),
     canRedo = $bindable(false),
     triggerUndo = $bindable(),
@@ -45,23 +43,8 @@
 
   let editorEl = $state();
   let editorContainerEl = $state();
-  let bookColumnCount = $state(1);
   let lastSerializedMarkdown = '';
-  let previousModeWasBook = false;
-  let allPages = $state(['']);
-  let pageRefs = $state([]);
-  let visiblePages = $derived.by(() => {
-    const start = currentSpread * bookColumnCount;
-    const sliced = allPages.slice(start, start + bookColumnCount);
-    while (sliced.length < bookColumnCount) {
-      sliced.push('');
-    }
-    return sliced;
-  });
-  let pendingResplit = $state(false);
-  let pageHeight = $state(0);
-  let reflowInProgress = $state(false);
-  let measuringEl = $state();
+  let prevImageUrls = new Set();
 
   // Undo/Redo history stack states
   let history = $state([contentMarkdown]);
@@ -89,8 +72,6 @@
     h1: false,
     h2: false,
     h3: false,
-    h4: false,
-    h5: false,
     ul: false,
     ol: false,
     todoList: false,
@@ -138,10 +119,9 @@
       canRedo = true;
       
       tick().then(() => {
-        if (mode !== 'book' && editorEl) {
+        if (editorEl) {
           editorEl.innerHTML = markdownToHtml(contentMarkdown);
-        } else if (mode === 'book') {
-          writeBookPages(true);
+          scanImageUrls();
         }
         isUndoRedoAction = false;
       });
@@ -157,10 +137,9 @@
       canRedo = historyIndex < history.length - 1;
       
       tick().then(() => {
-        if (mode !== 'book' && editorEl) {
+        if (editorEl) {
           editorEl.innerHTML = markdownToHtml(contentMarkdown);
-        } else if (mode === 'book') {
-          writeBookPages(true);
+          scanImageUrls();
         }
         isUndoRedoAction = false;
       });
@@ -191,18 +170,88 @@
 
   // Global keydown intercept for Undo/Redo inside the editor
   function handleEditorKeyDown(e) {
-    // Delete selected image on Backspace or Delete
-    if (selectedImageNode && (e.key === 'Backspace' || e.key === 'Delete')) {
-      e.preventDefault();
-      deleteSelectedImage();
+    if (selectedImageNode) {
+      // Delete selected image on Backspace or Delete
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        deleteSelectedImage();
+        return;
+      }
+      // Escape clears image selection
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearImageSelection();
+        return;
+      }
+      // Enter inserts or focuses a paragraph below the image wrapper
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        let nextEl = selectedImageNode.nextSibling;
+        
+        const isNextEmptyParagraph = nextEl && nextEl.nodeName === 'P' && (nextEl.textContent.trim() === '' && !nextEl.querySelector('img, table, div'));
+        
+        if (!isNextEmptyParagraph) {
+          const p = document.createElement('p');
+          p.innerHTML = '<br>';
+          selectedImageNode.parentNode.insertBefore(p, selectedImageNode.nextSibling);
+          nextEl = p;
+        }
+        
+        if (editorEl) {
+          editorEl.focus();
+        }
+        
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(nextEl);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        
+        clearImageSelection();
+        triggerChange();
+        return;
+      }
+      
+      // Printable characters or spaces
+      const isNavigationOrModifier = e.ctrlKey || e.metaKey || e.altKey || [
+        'Shift', 'CapsLock', 'Control', 'Alt', 'Meta', 'Escape', 'Tab',
+        'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete',
+        'Home', 'End', 'PageUp', 'PageDown', 'Insert'
+      ].includes(e.key) || (e.key.startsWith('F') && e.key.length > 1 && !isNaN(e.key.slice(1)));
+
+      if (!isNavigationOrModifier) {
+        let nextEl = selectedImageNode.nextSibling;
+        const isNextEmptyParagraph = nextEl && nextEl.nodeName === 'P' && (nextEl.textContent.trim() === '' && !nextEl.querySelector('img, table, div'));
+        
+        if (!isNextEmptyParagraph) {
+          const p = document.createElement('p');
+          p.innerHTML = '<br>';
+          selectedImageNode.parentNode.insertBefore(p, selectedImageNode.nextSibling);
+          nextEl = p;
+        }
+
+        if (editorEl) {
+          editorEl.focus();
+        }
+
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(nextEl);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+
+        clearImageSelection();
+        // Do NOT prevent default, so the character is typed into the focused empty paragraph
+      }
       return;
     }
-    // Escape clears image selection
-    if (selectedImageNode && e.key === 'Escape') {
-      e.preventDefault();
-      clearImageSelection();
-      return;
-    }
+
     if (slashMenuOpen) {
       // Let slash menu keydown handle navigation
       handleSlashMenuKeyDown(e);
@@ -228,8 +277,6 @@
     { label: 'Heading 1', search: 'h1 heading 1', icon: Heading1, action: () => convertBlock('h1') },
     { label: 'Heading 2', search: 'h2 heading 2', icon: Heading2, action: () => convertBlock('h2') },
     { label: 'Heading 3', search: 'h3 heading 3', icon: Heading3, action: () => convertBlock('h3') },
-    { label: 'Heading 4', search: 'h4 heading 4', icon: Heading4, action: () => convertBlock('h4') },
-    { label: 'Heading 5', search: 'h5 heading 5', icon: Heading5, action: () => convertBlock('h5') },
     { label: 'Bold', search: 'bold text strong', icon: Bold, action: () => toggleInlineFormat('bold') },
     { label: 'Italic', search: 'italic text em', icon: Italic, action: () => toggleInlineFormat('italic') },
     { label: 'Underline', search: 'underline text u', icon: Underline, action: () => toggleInlineFormat('underline') },
@@ -362,15 +409,9 @@
     };
     
     if (editorEl) editorEl.addEventListener('scroll', handleScroll);
-    pageRefs.forEach(ref => {
-      if (ref) ref.addEventListener('scroll', handleScroll);
-    });
     
     return () => {
       if (editorEl) editorEl.removeEventListener('scroll', handleScroll);
-      pageRefs.forEach(ref => {
-        if (ref) ref.removeEventListener('scroll', handleScroll);
-      });
     };
   });
 
@@ -399,7 +440,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI'].includes(blockNode.nodeName)) {
@@ -441,7 +482,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI', 'DIV'].includes(blockNode.nodeName)) {
@@ -460,7 +501,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI'].includes(blockNode.nodeName)) {
@@ -501,7 +542,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI'].includes(blockNode.nodeName)) {
@@ -529,7 +570,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI'].includes(blockNode.nodeName)) {
@@ -554,7 +595,7 @@
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    const activeEl = mode === 'book' ? document.activeElement : editorEl;
+    const activeEl = editorEl;
     let blockNode = range.startContainer;
     
     while (blockNode && blockNode !== activeEl && !['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'LI'].includes(blockNode.nodeName)) {
@@ -573,11 +614,36 @@
   }
 
   function triggerChange() {
-    if (mode === 'book') {
-      handleBookInput();
-    } else {
-      handleInput();
+    cleanupRemovedImages();
+    handleInput();
+  }
+
+  function scanImageUrls() {
+    prevImageUrls.clear();
+    if (!editorEl) return;
+    editorEl.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      if (src.startsWith('/images/')) prevImageUrls.add(src);
+    });
+  }
+
+  function cleanupRemovedImages() {
+    if (prevImageUrls.size === 0) return;
+    const currentUrls = new Set();
+    editorEl.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      if (src.startsWith('/images/')) currentUrls.add(src);
+    });
+    for (const url of prevImageUrls) {
+      if (!currentUrls.has(url)) {
+        fetch('/api/upload/image', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        }).catch(() => {});
+      }
     }
+    prevImageUrls = currentUrls;
   }
 
   function handleSlashMenuKeyDown(e) {
@@ -1092,120 +1158,7 @@
     return blocks.map(blockToHtml).join('\n');
   }
 
-  function splitBlocks(blocks, columnCount) {
-    if (!blocks || blocks.length === 0) {
-      return columnCount <= 1 ? [''] : ['', ''];
-    }
-    if (columnCount <= 1) return [blocks.map(blockToHtml).join('\n')];
-    const half = Math.ceil(blocks.length / 2);
-    return [
-      blocks.slice(0, half).map(blockToHtml).join('\n'),
-      blocks.slice(half).map(blockToHtml).join('\n')
-    ];
-  }
 
-  function appendListItem(html, itemContent, listTag, startVal = 1, isChecklist = false, checked = false) {
-    let liHtml;
-    if (isChecklist) {
-      liHtml = `<li style="list-style-type: none;"><input type="checkbox"${checked ? ' checked' : ''} style="margin-right: 8px;" /> ${renderInlineMarkdown(itemContent)}</li>`;
-    } else {
-      liHtml = `<li>${renderInlineMarkdown(itemContent)}</li>`;
-    }
-    
-    const closingTag = isChecklist ? '</ul>' : `</${listTag}>`;
-    if (html.endsWith(closingTag)) {
-      return html.slice(0, -closingTag.length) + liHtml + closingTag;
-    } else {
-      if (isChecklist) {
-        return (html ? html + '\n' : '') + `<ul class="todo-list" data-todo-list="true">${liHtml}</ul>`;
-      } else {
-        const startAttr = (listTag === 'ol' && startVal > 1) ? ` start="${startVal}"` : '';
-        return (html ? html + '\n' : '') + `<${listTag}${startAttr}>${liHtml}</${listTag}>`;
-      }
-    }
-  }
-
-  function splitByHeight(blocks, targetHeight) {
-    if (!blocks || blocks.length === 0 || !measuringEl) {
-      return [''];
-    }
-    const width = pageRefs[0] ? pageRefs[0].clientWidth : 0;
-    if (width > 0) {
-      measuringEl.style.width = width + 'px';
-    } else if (editorContainerEl) {
-      const containerWidth = editorContainerEl.clientWidth;
-      if (containerWidth > 0) {
-        const estPageWidth = (containerWidth - 20) / (bookColumnCount || 2) - 30;
-        measuringEl.style.width = Math.max(200, estPageWidth) + 'px';
-      }
-    } else {
-      measuringEl.style.width = '';
-    }
-    const safetyMargin = 10;
-    const adjustedHeight = targetHeight - safetyMargin;
-    console.log('[splitByHeight] targetHeight:', targetHeight, 'adjustedHeight:', adjustedHeight, 'clientWidth:', width);
-    const pages = [];
-    let currentHtml = '';
-    for (let idx = 0; idx < blocks.length; idx++) {
-      const block = blocks[idx];
-      const blockHtml = blockToHtml(block);
-      if (block.type === 'list') {
-        const lines = block.content.split('\n').map(l => l.trim());
-        const isChecklist = lines.some(l => l.startsWith('- [ ]') || l.startsWith('- [x]') || l.startsWith('- [X]'));
-        
-        if (isChecklist) {
-          for (let itemIdx = 0; itemIdx < lines.length; itemIdx++) {
-            const line = lines[itemIdx];
-            const checked = line.startsWith('- [x]') || line.startsWith('- [X]');
-            const content = line.replace(/^-\s*\[[ xX]\]\s*/, '');
-            const testHtml = appendListItem(currentHtml, content, 'ul', 1, true, checked);
-            measuringEl.innerHTML = testHtml;
-            const sh = measuringEl.scrollHeight;
-            if (sh > adjustedHeight && currentHtml) {
-              pages.push(currentHtml);
-              currentHtml = appendListItem('', content, 'ul', 1, true, checked);
-            } else {
-              currentHtml = testHtml;
-            }
-          }
-        } else {
-          const match = block.content.trim().match(/^(\d+)\.\s/);
-          const isOrdered = !!match;
-          const listStart = match ? parseInt(match[1], 10) : 1;
-          const listTag = isOrdered ? 'ol' : 'ul';
-          const items = parseListItems(block.content);
-          for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
-            const item = items[itemIdx];
-            const testHtml = appendListItem(currentHtml, item, listTag, isOrdered ? (listStart + itemIdx) : 1, false, false);
-            measuringEl.innerHTML = testHtml;
-            const sh = measuringEl.scrollHeight;
-            if (sh > adjustedHeight && currentHtml) {
-              pages.push(currentHtml);
-              currentHtml = appendListItem('', item, listTag, isOrdered ? (listStart + itemIdx) : 1, false, false);
-            } else {
-              currentHtml = testHtml;
-            }
-          }
-        }
-      } else {
-        const testHtml = currentHtml ? currentHtml + '\n' + blockHtml : blockHtml;
-        measuringEl.innerHTML = testHtml;
-        const sh = measuringEl.scrollHeight;
-        console.log(`[splitByHeight] Block ${idx} [${block.type}]: scrollHeight=${sh}, targetHeight=${targetHeight}`);
-        if (sh > adjustedHeight && currentHtml) {
-          pages.push(currentHtml);
-          console.log(`[splitByHeight] Pushed page. Pages count now: ${pages.length}`);
-          currentHtml = blockHtml;
-        } else {
-          currentHtml = testHtml;
-        }
-      }
-    }
-    if (currentHtml) pages.push(currentHtml);
-    if (pages.length === 0) pages.push('');
-    console.log('[splitByHeight] Resulting page count:', pages.length);
-    return pages;
-  }
 
   // HTML to Markdown Serializer
   function htmlToMarkdown(element) {
@@ -1223,11 +1176,19 @@
     if (node.nodeType === Node.ELEMENT_NODE) {
       const tag = node.tagName.toLowerCase();
       
-      if (tag === 'h1') return `# ${node.textContent.trim()}\n\n`;
-      if (tag === 'h2') return `## ${node.textContent.trim()}\n\n`;
-      if (tag === 'h3') return `### ${node.textContent.trim()}\n\n`;
+      const serializeChildren = (el) => {
+        let md = '';
+        for (const child of el.childNodes) {
+          md += nodeToMarkdown(child);
+        }
+        return md;
+      };
+
+      if (tag === 'h1') return `# ${serializeChildren(node).trim()}\n\n`;
+      if (tag === 'h2') return `## ${serializeChildren(node).trim()}\n\n`;
+      if (tag === 'h3') return `### ${serializeChildren(node).trim()}\n\n`;
       if (tag === 'p') {
-        const text = node.textContent.trim();
+        const text = serializeChildren(node).trim();
         return text ? `${text}\n\n` : '\n';
       }
       if (tag === 'br') return '\n';
@@ -1242,10 +1203,7 @@
         if (title) header += ` ${title}`;
         header += '\n';
         
-        let body = '';
-        for (const child of node.childNodes) {
-          body += nodeToMarkdown(child);
-        }
+        const body = serializeChildren(node);
         const lines = body.trim().split('\n');
         const quoted = lines.map(line => line.startsWith('>') ? line : `> ${line}`).join('\n');
         return `${header}${quoted}\n\n`;
@@ -1257,11 +1215,7 @@
         const parts = node.querySelectorAll(':scope > .column-part');
         parts.forEach((part, idx) => {
           if (idx > 0) colMd += `<!-- column -->\n`;
-          let partMd = '';
-          for (const child of part.childNodes) {
-            partMd += nodeToMarkdown(child);
-          }
-          colMd += partMd.trim() + '\n';
+          colMd += serializeChildren(part).trim() + '\n';
         });
         colMd += `<!-- /columns -->\n\n`;
         return colMd;
@@ -1269,7 +1223,7 @@
 
       if (tag === 'details') {
         const summaryNode = node.querySelector(':scope > summary');
-        const summaryText = summaryNode ? summaryNode.textContent.trim() : 'Toggle List Title';
+        const summaryText = summaryNode ? serializeChildren(summaryNode).trim() : 'Toggle List Title';
         let bodyHtml = '';
         for (const child of node.childNodes) {
           if (child.tagName && child.tagName.toLowerCase() === 'summary') continue;
@@ -1285,10 +1239,10 @@
           if (isTodo) {
             const checkbox = li.querySelector('input[type="checkbox"]');
             const checked = checkbox ? checkbox.checked : false;
-            let text = li.textContent.trim();
+            let text = serializeChildren(li).trim();
             listMd += `- [${checked ? 'x' : ' '}] ${text}\n`;
           } else {
-            listMd += `- ${li.textContent.trim()}\n`;
+            listMd += `- ${serializeChildren(li).trim()}\n`;
           }
         }
         return listMd ? `${listMd}\n` : '';
@@ -1300,7 +1254,7 @@
         let idx = startAttr ? parseInt(startAttr, 10) : 1;
         if (isNaN(idx)) idx = 1;
         for (const li of node.querySelectorAll(':scope > li')) {
-          listMd += `${idx++}. ${li.textContent.trim()}\n`;
+          listMd += `${idx++}. ${serializeChildren(li).trim()}\n`;
         }
         return listMd ? `${listMd}\n` : '';
       }
@@ -1311,13 +1265,13 @@
         const rows = [];
         const ths = node.querySelectorAll('thead th, tr:first-child th');
         if (ths.length > 0) {
-          ths.forEach(th => headers.push(th.textContent.trim()));
+          ths.forEach(th => headers.push(serializeChildren(th).trim()));
         }
         const trs = node.querySelectorAll('tbody tr, tr');
         trs.forEach(tr => {
           if (tr.querySelector('th')) return;
           const row = [];
-          tr.querySelectorAll('td').forEach(td => row.push(td.textContent.trim()));
+          tr.querySelectorAll('td').forEach(td => row.push(serializeChildren(td).trim()));
           if (row.length > 0) rows.push(row);
         });
         if (headers.length > 0) {
@@ -1361,32 +1315,14 @@
         return `<!-- image:${JSON.stringify(meta)} -->\n![${alt}](${src})\n\n`;
       }
       
-      if (tag === 'strong') return `**${node.textContent}**`;
-      if (tag === 'em') return `*${node.textContent}*`;
-      if (tag === 'code') return `\`${node.textContent}\``;
-      if (tag === 'a') return `[${node.textContent}](${node.getAttribute('href')})`;
+      if (tag === 'strong') return `**${serializeChildren(node)}**`;
+      if (tag === 'em') return `*${serializeChildren(node)}*`;
+      if (tag === 'code') return `\`${serializeChildren(node)}\``;
+      if (tag === 'a') return `[${serializeChildren(node)}](${node.getAttribute('href')})`;
       
-      let inner = '';
-      for (const child of node.childNodes) {
-        inner += nodeToMarkdown(child);
-      }
-      return inner;
+      return serializeChildren(node);
     }
     return '';
-  }
-
-  function calculateTotalSpreads() {
-    if (mode === 'book') {
-      const totalPages = allPages.length;
-      const pagesPerSpread = bookColumnCount;
-      totalSpreads = Math.max(1, Math.ceil(totalPages / pagesPerSpread));
-      if (currentSpread >= totalSpreads) {
-        currentSpread = totalSpreads - 1;
-      }
-    } else {
-      totalSpreads = 1;
-      currentSpread = 0;
-    }
   }
 
   // Handle local text adjustments and typing updates
@@ -1396,7 +1332,6 @@
       const md = htmlToMarkdown(editorEl);
       lastSerializedMarkdown = md;
       contentMarkdown = md;
-      calculateTotalSpreads();
       if (slashMenuOpen) {
         checkSlashMenuQuery();
       } else {
@@ -1405,53 +1340,22 @@
     }
   }
 
-  function handleBookInput() {
-    markLocalChange();
-    const start = currentSpread * bookColumnCount;
-    let fullHtml = '';
-    for (let i = 0; i < allPages.length; i++) {
-      const localIdx = i - start;
-      if (localIdx >= 0 && localIdx < pageRefs.length && pageRefs[localIdx]) {
-        fullHtml += pageRefs[localIdx].innerHTML;
-      } else {
-        fullHtml += allPages[i] || '';
-      }
-    }
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = fullHtml;
-    const md = htmlToMarkdown(tempDiv);
-    lastSerializedMarkdown = md;
-    contentMarkdown = md;
-    if (slashMenuOpen) {
-      checkSlashMenuQuery();
-    } else {
-      checkSlashMenuTrigger();
-    }
-    if (pendingResplit) {
-      pendingResplit = false;
-      const blocks = parseMarkdownToBlocks(md);
-      allPages = pageHeight > 0 ? splitByHeight(blocks, pageHeight) : splitBlocks(blocks, bookColumnCount);
-      writeBookPages(true);
-    }
-    scheduleOverflowCheck();
-  }
-
   // Image insertion at cursor
   function insertImageAtCursor(url, alt = '', localPath = '') {
-    const targetEl = mode === 'book' ? document.activeElement : editorEl;
-    if (!targetEl || (mode !== 'book' && !editorEl)) return;
+    const targetEl = editorEl;
+    if (!targetEl) return;
     targetEl.focus();
 
     const selection = window.getSelection();
-    
+    if (!selection || !selection.getRangeAt || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
     const wrapper = document.createElement('div');
     wrapper.className = 'editor-image-wrap';
     wrapper.setAttribute('data-align', 'center');
     wrapper.setAttribute('data-width', '');
-    if (localPath) {
-      wrapper.setAttribute('data-localpath', localPath);
-    }
-    
+    if (localPath) wrapper.setAttribute('data-localpath', localPath);
+
     const img = document.createElement('img');
     img.src = url;
     img.alt = alt;
@@ -1460,30 +1364,83 @@
     const nextLine = document.createElement('p');
     nextLine.innerHTML = '<br>';
 
-    if (selection && selection.getRangeAt && selection.rangeCount) {
-      const range = selection.getRangeAt(0);
-      if (targetEl.contains(range.commonAncestorContainer)) {
-        range.deleteContents();
-        
-        // Insert empty paragraph first so it's placed after/under the image
-        range.insertNode(nextLine);
-        range.insertNode(wrapper);
-        
-        // Move selection caret to the next line under the image
-        const newRange = document.createRange();
-        newRange.setStart(nextLine, 0);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        
-        triggerChange();
-        return;
-      }
+    if (!targetEl.contains(range.commonAncestorContainer)) {
+      targetEl.appendChild(wrapper);
+      targetEl.appendChild(nextLine);
+      triggerChange();
+      return;
     }
-    
-    // Fallback if no selection
-    targetEl.appendChild(wrapper);
-    targetEl.appendChild(nextLine);
+
+    // Walk up from cursor to find if inside a heading
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+    let headingEl = null;
+    let temp = node;
+    while (temp && temp !== targetEl) {
+      const tag = temp.tagName;
+      if (tag === 'H1' || tag === 'H2' || tag === 'H3') {
+        headingEl = temp;
+        break;
+      }
+      temp = temp.parentNode;
+    }
+
+    if (headingEl) {
+      const headingTag = headingEl.tagName;
+      const headingParent = headingEl.parentNode;
+      const headingIndex = Array.from(headingParent.children).indexOf(headingEl);
+
+      // Extract text before and after cursor within the heading
+      const beforeRange = document.createRange();
+      beforeRange.setStart(headingEl, 0);
+      beforeRange.setEnd(range.startContainer, range.startOffset);
+      const beforeText = beforeRange.toString();
+
+      const afterRange = document.createRange();
+      afterRange.setStart(range.startContainer, range.startOffset);
+      afterRange.setEnd(headingEl, headingEl.childNodes.length);
+      const afterText = afterRange.toString();
+
+      // Clear and restore text before cursor
+      headingEl.innerHTML = '';
+      if (beforeText) headingEl.textContent = beforeText;
+
+      // Insert image + paragraph after the heading
+      headingParent.insertBefore(wrapper, headingEl.nextSibling);
+      headingParent.insertBefore(nextLine, wrapper.nextSibling);
+
+      // Create new heading for text after cursor
+      if (afterText.trim()) {
+        const afterHeading = document.createElement(headingTag);
+        afterHeading.textContent = afterText;
+        headingParent.insertBefore(afterHeading, nextLine.nextSibling);
+      }
+
+      // Remove heading if now empty
+      if (!headingEl.textContent.trim()) headingEl.remove();
+
+      // Move cursor to the paragraph after image
+      const newRange = document.createRange();
+      newRange.setStart(nextLine, 0);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      triggerChange();
+      return;
+    }
+
+    // Non-heading path: standard insertion
+    range.deleteContents();
+    range.insertNode(nextLine);
+    range.insertNode(wrapper);
+
+    const newRange = document.createRange();
+    newRange.setStart(nextLine, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+
     triggerChange();
   }
 
@@ -1513,8 +1470,6 @@
     if (text && /\.(png|jpg|jpeg|gif|webp|svg|bmp|avif)(\?|$)/i.test(text.trim())) {
       e.preventDefault();
       insertImageAtCursor(text.trim());
-    } else if (mode === 'book') {
-      pendingResplit = true;
     }
   }
 
@@ -1543,174 +1498,25 @@
     }
   }
 
-  // Write book page HTML to DOM
-  function writeBookPages(force = false) {
-    tick().then(() => {
-      const start = currentSpread * bookColumnCount;
-      for (let i = 0; i < pageRefs.length; i++) {
-        if (pageRefs[i]) {
-          const isFocused = pageRefs[i] === document.activeElement;
-          if (!force && isLocalChange && isFocused) {
-            continue;
-          }
-          pageRefs[i].innerHTML = allPages[start + i] || '';
-          pageRefs[i].style.overflowY = '';
-        }
-      }
-      scheduleOverflowCheck();
-    });
-  }
-
-  function checkOverflow() {
-    if (reflowInProgress || pageHeight === 0 || mode !== 'book') return;
-    for (let idx = 0; idx < pageRefs.length; idx++) {
-      const ref = pageRefs[idx];
-      if (ref && ref.scrollHeight > ref.clientHeight + 1) {
-        reflowInProgress = true;
-        const md = contentMarkdown;
-        const blocks = parseMarkdownToBlocks(md);
-        const newPages = splitByHeight(blocks, pageHeight);
-        const same = newPages.length === allPages.length && newPages.every((p, i) => p === allPages[i]);
-        if (same) {
-          ref.style.overflowY = 'auto';
-          reflowInProgress = false;
-          return;
-        }
-        allPages = newPages;
-        writeBookPages(true);
-        tick().then(() => { reflowInProgress = false; });
-        return;
-      }
-    }
-  }
-
-  let overflowCheckPending = false;
-  function scheduleOverflowCheck() {
-    if (!overflowCheckPending && !reflowInProgress) {
-      overflowCheckPending = true;
-      requestAnimationFrame(() => {
-        overflowCheckPending = false;
-        checkOverflow();
-      });
-    }
-  }
-
-  // Sync pageRefs array length with visiblePages
-  $effect(() => {
-    const len = visiblePages.length;
-    if (pageRefs.length !== len) {
-      pageRefs.length = len;
-    }
-  });
-
-  // Reactive splitting when input state or layout changes
-  $effect(() => {
-    if (mode === 'book') {
-      const md = contentMarkdown;
-      const height = pageHeight;
-      const cols = bookColumnCount;
-
-      let cleanMd = md;
-      const modeMatch = md.match(/^<!--\s*mode:\s*(\w+)\s*-->/);
-      if (modeMatch) {
-        cleanMd = md.replace(/^<!--\s*mode:\s*\w+\s*-->\n*/m, '');
-      }
-      const blocks = parseMarkdownToBlocks(cleanMd);
-      const newPages = height > 0 ? splitByHeight(blocks, height) : splitBlocks(blocks, cols);
-      
-      const same = newPages.length === allPages.length && newPages.every((p, i) => p === allPages[i]);
-      if (!same) {
-        allPages = newPages;
-      }
-    }
-  });
-
-  // Reactive DOM sync for visible pages when content, spread, or refs change
-  $effect(() => {
-    if (mode === 'book') {
-      const pages = allPages;
-      const start = currentSpread * bookColumnCount;
-      const refs = pageRefs; // track pageRefs
-      
-      writeBookPages();
-    }
-  });
-
-  // Reactive calculation and clamping of spreads
-  $effect(() => {
-    if (mode === 'book') {
-      const totalPages = allPages.length;
-      totalSpreads = Math.max(1, Math.ceil(totalPages / bookColumnCount));
-      if (currentSpread >= totalSpreads) {
-        currentSpread = Math.max(0, totalSpreads - 1);
-      }
-    } else {
-      totalSpreads = 1;
-      currentSpread = 0;
-    }
-  });
-
   // Handle normal mode rendering and outside mode changes
   $effect(() => {
     const contentChanged = contentMarkdown !== lastSerializedMarkdown;
-    const branchChanged = (mode === 'book') !== previousModeWasBook;
-
-    if (contentChanged || branchChanged) {
+    if (contentChanged) {
       lastSerializedMarkdown = contentMarkdown;
-      previousModeWasBook = mode === 'book';
-
       let md = contentMarkdown;
-      if (contentChanged) {
-        const modeMatch = md.match(/^<!--\s*mode:\s*(\w+)\s*-->/);
-        if (modeMatch) {
-          if (modeMatch[1] !== mode) mode = modeMatch[1];
-          md = md.replace(/^<!--\s*mode:\s*\w+\s*-->\n*/m, '');
-        }
+      const modeMatch = md.match(/^<!--\s*mode:\s*(\w+)\s*-->/);
+      if (modeMatch) {
+        if (modeMatch[1] !== mode) mode = modeMatch[1];
+        md = md.replace(/^<!--\s*mode:\s*\w+\s*-->\n*/m, '');
       }
 
-      if (mode !== 'book' && editorEl) {
+      if (editorEl) {
         const isFocused = editorEl === document.activeElement;
         if (!(isLocalChange && isFocused)) {
           editorEl.innerHTML = markdownToHtml(md);
+          scanImageUrls();
         }
       }
-    }
-  });
-
-  // ResizeObserver to toggle column count and page height
-  $effect(() => {
-    if (!editorContainerEl || mode !== 'book') return;
-    const ro = new ResizeObserver(() => {
-      const containerWidth = editorContainerEl.clientWidth;
-      const contentWidth = containerWidth - 20;
-      const newCount = contentWidth >= 1200 ? 2 : 1;
-      if (newCount !== bookColumnCount) {
-        bookColumnCount = newCount;
-      }
-
-      // Update pageHeight if a page is rendered and has height
-      if (pageRefs[0]) {
-        const newHeight = pageRefs[0].clientHeight;
-        if (newHeight > 0 && newHeight !== pageHeight) {
-          pageHeight = newHeight;
-        }
-      }
-    });
-    ro.observe(editorContainerEl);
-    return () => ro.disconnect();
-  });
-
-  // Reactively initialize pageHeight when entering book mode
-  $effect(() => {
-    if (mode === 'book') {
-      tick().then(() => {
-        if (pageRefs[0]) {
-          const newHeight = pageRefs[0].clientHeight;
-          if (newHeight > 0 && newHeight !== pageHeight) {
-            pageHeight = newHeight;
-          }
-        }
-      });
     }
   });
 
@@ -1721,26 +1527,11 @@
       if (modeMatch[1] !== mode) mode = modeMatch[1];
       md = md.replace(/^<!--\s*mode:\s*\w+\s*-->\n*/m, '');
     }
-    if (mode !== 'book' && editorEl) {
+    if (editorEl) {
       editorEl.innerHTML = markdownToHtml(md);
+      scanImageUrls();
     }
     lastSerializedMarkdown = contentMarkdown;
-
-    if (mode === 'book') {
-      tick().then(() => {
-        if (pageRefs[0] && pageHeight === 0) {
-          pageHeight = pageRefs[0].clientHeight;
-        }
-      });
-    }
-
-    const handleResize = () => {
-      if (mode === 'book' && pageRefs[0]) {
-        const newHeight = pageRefs[0].clientHeight;
-        if (newHeight > 0) pageHeight = newHeight;
-      }
-    };
-    window.addEventListener('resize', handleResize);
 
     const updateActiveFormat = () => {
       const selection = window.getSelection();
@@ -1749,7 +1540,7 @@
       const range = selection.getRangeAt(0);
       let node = range.startContainer;
       
-      const activeEl = mode === 'book' ? document.activeElement : editorEl;
+      const activeEl = editorEl;
       if (!activeEl || !activeEl.contains(node)) return;
 
       activeFormat.bold = document.queryCommandState('bold');
@@ -1764,8 +1555,6 @@
       activeFormat.h1 = false;
       activeFormat.h2 = false;
       activeFormat.h3 = false;
-      activeFormat.h4 = false;
-      activeFormat.h5 = false;
       activeFormat.ul = false;
       activeFormat.ol = false;
       activeFormat.todoList = false;
@@ -1784,8 +1573,6 @@
           if (tagName === 'H1') activeFormat.h1 = true;
           else if (tagName === 'H2') activeFormat.h2 = true;
           else if (tagName === 'H3') activeFormat.h3 = true;
-          else if (tagName === 'H4') activeFormat.h4 = true;
-          else if (tagName === 'H5') activeFormat.h5 = true;
           else if (tagName === 'UL') {
             if (parent.classList.contains('todo-list') || parent.getAttribute('data-todo-list') === 'true') {
               activeFormat.todoList = true;
@@ -1806,22 +1593,8 @@
 
     document.addEventListener('selectionchange', updateActiveFormat);
 
-    // Capture image load events to trigger reflow in book mode
-    const handleImageLoad = (e) => {
-      if (e.target && e.target.tagName === 'IMG' && mode === 'book') {
-        scheduleOverflowCheck();
-      }
-    };
-    if (editorContainerEl) {
-      editorContainerEl.addEventListener('load', handleImageLoad, true);
-    }
-
     return () => {
-      window.removeEventListener('resize', handleResize);
       document.removeEventListener('selectionchange', updateActiveFormat);
-      if (editorContainerEl) {
-        editorContainerEl.removeEventListener('load', handleImageLoad, true);
-      }
     };
   });
 </script>
@@ -1834,6 +1607,32 @@
 >
   <!-- Persistent Toolbar -->
   <div data-section="editor-toolbar" class="editor-toolbar">
+    <!-- History Undo/Redo -->
+    <div class="toolbar-group">
+      <button 
+        type="button" 
+        class="toolbar-btn" 
+        disabled={!canUndo}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => performUndo()}
+        title="Undo (Ctrl+Z)"
+      >
+        <Undo size={16} />
+      </button>
+      <button 
+        type="button" 
+        class="toolbar-btn" 
+        disabled={!canRedo}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => performRedo()}
+        title="Redo (Ctrl+Y)"
+      >
+        <Redo size={16} />
+      </button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
     <!-- Headings -->
     <div class="toolbar-group">
       <button 
@@ -1865,26 +1664,6 @@
         title="Heading 3"
       >
         <Heading3 size={16} />
-      </button>
-      <button 
-        type="button" 
-        class="toolbar-btn" 
-        class:active={activeFormat.h4}
-        onmousedown={(e) => e.preventDefault()}
-        onclick={() => convertBlock('h4')}
-        title="Heading 4"
-      >
-        <Heading4 size={16} />
-      </button>
-      <button 
-        type="button" 
-        class="toolbar-btn" 
-        class:active={activeFormat.h5}
-        onmousedown={(e) => e.preventDefault()}
-        onclick={() => convertBlock('h5')}
-        title="Heading 5"
-      >
-        <Heading5 size={16} />
       </button>
     </div>
 
@@ -2090,6 +1869,42 @@
       </button>
     </div>
 
+    <div class="toolbar-divider"></div>
+
+    <!-- Layout Width Controls -->
+    <div class="toolbar-group">
+      <button 
+        type="button" 
+        class="toolbar-btn" 
+        class:active={mode === 'normal'}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => mode = 'normal'}
+        title="Normal Layout"
+      >
+        N
+      </button>
+      <button 
+        type="button" 
+        class="toolbar-btn" 
+        class:active={mode === 'wide'}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => mode = 'wide'}
+        title="Wide Layout"
+      >
+        W
+      </button>
+      <button 
+        type="button" 
+        class="toolbar-btn" 
+        class:active={mode === 'ultrawide'}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => mode = 'ultrawide'}
+        title="Ultrawide Layout"
+      >
+        U
+      </button>
+    </div>
+
     {#if selectedImageNode}
       <div class="toolbar-divider"></div>
 
@@ -2147,41 +1962,20 @@
       </button>
     {/if}
   </div>
-  {#if mode === 'book'}
-    <div class="editor-canvas book-canvas-wrapper" data-section="book-canvas">
-      <div class="book-pages">
-        {#each visiblePages as _, i}
-          <div
-            contenteditable="true"
-            class="book-page"
-            bind:this={pageRefs[i]}
-            oninput={handleBookInput}
-            onkeydown={handleEditorKeyDown}
-            onclick={handleCanvasClick}
-            ondblclick={handleEditorDblClick}
-            ondragover={handleEditorDragOver}
-            ondrop={handleEditorDrop}
-            data-page={i}
-            style="--editor-page-height: {pageHeight}px;"
-          ></div>
-        {/each}
-      </div>
-      <div class="book-measurer" bind:this={measuringEl}></div>
-    </div>
-  {:else}
-    <div 
-      contenteditable="true"
-      bind:this={editorEl}
-      class="editor-canvas"
-      oninput={handleInput}
-      onkeydown={handleEditorKeyDown}
-      onclick={handleCanvasClick}
-      ondblclick={handleEditorDblClick}
-      ondragover={handleEditorDragOver}
-      ondrop={handleEditorDrop}
-      style="transform: none;"
-    ></div>
-  {/if}
+
+  <div 
+    contenteditable="true"
+    bind:this={editorEl}
+    class="editor-canvas"
+    oninput={handleInput}
+    onkeydown={handleEditorKeyDown}
+    onclick={handleCanvasClick}
+    ondblclick={handleEditorDblClick}
+    ondragover={handleEditorDragOver}
+    ondrop={handleEditorDrop}
+    style="transform: none;"
+    data-section="editor-canvas"
+  ></div>
 
   <div 
     class="slash-menu" 
@@ -2255,7 +2049,7 @@
 
 
   /* --- Normal Scrolling Modes --- */
-  .editor-container:not(.mode-book) .editor-canvas {
+  .editor-container .editor-canvas {
     overflow-y: auto;
     margin: 0 auto;
     width: 100%;
@@ -2271,60 +2065,7 @@
     max-width: 100%;
   }
 
-  /* --- Book Mode Overrides --- */
-  .editor-container.mode-book .editor-canvas {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 10px; /* Restored padding for book canvas to align correctly when container padding is 0 */
-    position: relative;
-  }
-
-  .book-pages {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    padding: 0;
-    box-sizing: border-box;
-    min-height: 0;
-    flex: 1;
-  }
-
-  .book-page {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    padding: 15px;
-    outline: none;
-    font-family: var(--font-body);
-    font-size: var(--fs-body);
-    line-height: 1.6;
-    word-break: break-word;
-    overflow-y: hidden;
-    border-radius: var(--radius);
-    background: var(--bg-surface);
-    position: relative;
-  }
-
-  .book-measurer {
-    position: absolute;
-    left: -9999px;
-    top: 0;
-    visibility: hidden;
-    padding: 15px;
-    font-family: var(--font-body);
-    font-size: var(--fs-body);
-    line-height: 1.6;
-    word-break: break-word;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .editor-container.theme-white .book-page {
-    background: #f5f5f5;
-  }
-
-  .editor-container.theme-white:not(.mode-book) .editor-canvas {
+  .editor-container.theme-white .editor-canvas {
     background: #f5f5f5;
   }
 
@@ -2342,30 +2083,10 @@
     display: block;
     width: 100%;
     box-sizing: border-box;
+    margin-bottom: 16px;
   }
 
-  /* --- Book Mode Layout Guardrails --- */
-  .editor-container.mode-book .editor-canvas :global(code),
-  .editor-container.mode-book .editor-canvas :global(pre) {
-    white-space: pre-wrap !important;
-    word-break: break-word !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
 
-  .editor-container.mode-book .editor-canvas :global(p),
-  .editor-container.mode-book .editor-canvas :global(li),
-  .editor-container.mode-book .editor-canvas :global(span) {
-    word-break: break-word !important;
-    white-space: normal !important;
-  }
-
-  .editor-container.mode-book .editor-canvas :global(.grid-cell),
-  .editor-container.mode-book .editor-canvas :global(.column-part),
-  .editor-container.mode-book .editor-canvas :global(.columns-wrapper) {
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
 
   /* --- Styled HTML elements in contenteditable --- */
   .editor-canvas :global(h1) {
@@ -2375,8 +2096,7 @@
     color: var(--cyan);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-top: 0;
-    margin-bottom: 16px;
+    margin: 0 0 16px 0;
     break-after: avoid;
   }
 
@@ -2390,8 +2110,7 @@
     font-weight: 600;
     color: var(--cyan);
     text-transform: uppercase;
-    margin-top: 24px;
-    margin-bottom: 12px;
+    margin: 0 0 16px 0;
     break-after: avoid;
   }
 
@@ -2404,8 +2123,7 @@
     font-size: var(--fs-body);
     font-weight: 600;
     color: var(--text);
-    margin-top: 18px;
-    margin-bottom: 8px;
+    margin: 0 0 16px 0;
     break-after: avoid;
   }
 
@@ -2473,6 +2191,7 @@
     cursor: pointer;
     scrollbar-width: thin;
     scrollbar-color: var(--cyan-dim) transparent;
+    margin-bottom: 16px;
   }
 
   .editor-canvas :global(.editor-image-wrap + p) {
@@ -2553,67 +2272,7 @@
     background: rgba(34, 197, 94, 0.05);
   }
 
-  /* Book Mode controls */
-  .book-controls {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    padding: 16px;
-    background: var(--bg-surface);
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
 
-  .editor-container.theme-white .book-controls {
-    background: #f9f9f9;
-    border-top-color: #dddddd;
-  }
-
-  .book-controls .nav-btn {
-    padding: 8px 16px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: var(--radius);
-    cursor: pointer;
-    font-family: var(--font-body);
-    font-size: var(--fs-small);
-    transition: all 0.2s;
-  }
-
-  .book-controls .nav-btn:hover:not(:disabled) {
-    background: var(--bg-elevated);
-    border-color: var(--cyan);
-    color: var(--cyan);
-  }
-
-  .editor-container.theme-white .book-controls .nav-btn {
-    background: #ffffff;
-    border-color: #dddddd;
-    color: #333333;
-  }
-
-  .editor-container.theme-white .book-controls .nav-btn:hover:not(:disabled) {
-    background: #f0f0f0;
-    border-color: var(--cyan-dark);
-    color: var(--cyan-dark);
-  }
-
-  .book-controls .nav-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .spread-indicator {
-    font-family: var(--font-heading);
-    font-size: var(--fs-small);
-    color: var(--text-dim);
-  }
-
-  .editor-container.theme-white .spread-indicator {
-    color: #666666;
-  }
 
   /* Slash Menu Popover */
   .slash-menu {

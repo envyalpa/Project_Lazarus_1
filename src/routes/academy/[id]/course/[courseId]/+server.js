@@ -1,25 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { getById, update, remove } from '$lib/server/academy/courses.js';
+import { detailHandlers } from '$lib/server/crud.js';
+import * as courseStore from '$lib/server/academy/courses.js';
 import { create as createNote, update as updateNote, remove as removeNote } from '$lib/server/academy/notes.js';
 
-export async function GET({ params }) {
-  const course = getById(params.courseId);
-  if (!course) return json({ error: 'Not found' }, { status: 404 });
-  return json(course);
-}
-
-export async function PUT({ params, request }) {
-  const data = await request.json();
-  const course = update(params.courseId, data);
-  if (!course) return json({ error: 'Not found' }, { status: 404 });
-  return json(course);
-}
-
-export async function DELETE({ params }) {
-  const course = remove(params.courseId);
-  if (!course) return json({ error: 'Not found' }, { status: 404 });
-  return json(course);
-}
+export const { GET, PUT, DELETE } = detailHandlers(courseStore, { idParam: 'courseId' });
 
 export async function POST({ params, request }) {
   const data = await request.json();

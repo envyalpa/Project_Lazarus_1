@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { Trash2, Square, CheckSquare } from '@lucide/svelte';
   import DatePicker from '$lib/components/operations/DatePicker.svelte';
   import { formatCurrency, parseCurrency } from '$lib/utils.js';
@@ -33,12 +33,29 @@
     notifySelection();
   }
 
-  const personColors = {
-    Me: { border: 'var(--blue)', text: 'var(--blue)', bg: 'rgba(0,136,255,0.12)' },
-    Family: { border: 'var(--amber)', text: 'var(--amber)', bg: 'rgba(255,140,0,0.12)' },
-    Sister: { border: 'var(--purple)', text: 'var(--purple)', bg: 'rgba(168,85,247,0.12)' },
-    Wife: { border: 'var(--cyan)', text: 'var(--cyan)', bg: 'rgba(0,212,255,0.12)' }
-  };
+  import { colorValues } from '$lib/shared/colors.js';
+
+  const orderMap = { 'Me': 0, 'Wife': 1, 'Junior': 2, 'Sister': 3, 'Family': 4 };
+  let splitOptions = $derived(
+    ['Me', ...people.filter(p => p.show_in_summary === 1).map(p => p.name)]
+      .sort((a, b) => (orderMap[a] ?? 99) - (orderMap[b] ?? 99))
+  );
+
+  function getPersonColor(name) {
+    if (name === 'Me') {
+      return { border: 'var(--blue)', text: 'var(--blue)', bg: 'rgba(0,136,255,0.12)' };
+    }
+    const p = people.find(x => x.name === name);
+    if (!p) {
+      return { border: 'var(--cyan)', text: 'var(--cyan)', bg: 'rgba(0,212,255,0.12)' };
+    }
+    const colorVal = colorValues[p.color] || 'var(--cyan)';
+    return {
+      border: colorVal,
+      text: colorVal,
+      bg: colorVal.startsWith('#') ? `${colorVal}22` : 'rgba(0,212,255,0.12)'
+    };
+  }
 
   const typeOptions = ['income', 'expense', 'transfer'];
 
@@ -343,9 +360,9 @@
           </td>
           <td>
             <div class="split-inline">
-              {#each ['Me', 'Family', 'Sister', 'Wife'] as person}
+              {#each splitOptions as person}
                 {@const active = isSplitActive(txn, person)}
-                {@const c = personColors[person]}
+                {@const c = getPersonColor(person)}
                 {@const isDisabled = txn.type === 'transfer' || txn.type === 'income'}
                 <button type="button" class="split-chip" class:active class:disabled={isDisabled}
                   style={active ? `border-color:${c.border};color:${c.text};background:${c.bg}` : ''}

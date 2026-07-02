@@ -21,39 +21,29 @@ const stmts = {
   removeAll: db.prepare('DELETE FROM transactions')
 };
 
-function getWeekRange(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const mon = new Date(d.setDate(diff));
-  const sun = new Date(mon);
-  sun.setDate(sun.getDate() + 6);
-  const fmt = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
-  return { start: fmt(mon), end: fmt(sun) };
-}
-
-function getMonthRange(dateStr) {
-  const parts = dateStr.split('-');
-  const y = Number(parts[0]);
-  const m = parts[1] ? Number(parts[1]) : (parts[0].length === 4 ? 1 : 0);
-  const monthStart = y + '-' + String(m).padStart(2, '0') + '-01';
-  const lastDay = new Date(y, m, 0).getDate();
-  const monthEnd = y + '-' + String(m).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
-  return { start: monthStart, end: monthEnd };
-}
-
-function getYearRange(dateStr) {
-  const y = dateStr.split('-')[0];
-  return { start: y + '-01-01', end: y + '-12-31' };
-}
-
-const stmtCache = new Map();
-
-function getCachedStmt(sql) {
-  if (!stmtCache.has(sql)) {
-    stmtCache.set(sql, db.prepare(sql));
+function getDateRange(range, dateStr) {
+  if (range === 'day') return { start: dateStr, end: dateStr };
+  if (range === 'year') {
+    const y = dateStr.split('-')[0];
+    return { start: y + '-01-01', end: y + '-12-31' };
   }
-  return stmtCache.get(sql);
+  if (range === 'month') {
+    const parts = dateStr.split('-');
+    const y = Number(parts[0]);
+    const m = parts[1] ? Number(parts[1]) : 1;
+    const lastDay = new Date(y, m, 0).getDate();
+    return { start: y + '-' + String(m).padStart(2, '0') + '-01', end: y + '-' + String(m).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0') };
+  }
+  if (range === 'week') {
+    const d = new Date(dateStr + 'T00:00:00');
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const mon = new Date(d.setDate(diff));
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+    const fmt = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+    return { start: fmt(mon), end: fmt(sun) };
+  }
 }
 
 export function getFiltered(filters = {}) {
@@ -70,16 +60,7 @@ export function getFiltered(filters = {}) {
       params.endDate = filters.endDate;
     } else if (filters.range) {
       const refDate = filters.date || new Date().toISOString().slice(0, 10);
-      let range;
-      if (filters.range === 'day') {
-        range = { start: refDate, end: refDate };
-      } else if (filters.range === 'week') {
-        range = getWeekRange(refDate);
-      } else if (filters.range === 'month') {
-        range = getMonthRange(refDate);
-      } else if (filters.range === 'year') {
-        range = getYearRange(refDate);
-      }
+      const range = getDateRange(filters.range, refDate);
       if (range) {
         clauses.push('t.date >= @startDate AND t.date <= @endDate');
         params.startDate = range.start;
@@ -94,8 +75,9 @@ export function getFiltered(filters = {}) {
   }
 
   if (filters.entity) {
-    clauses.push('(t.paid_by = @entity OR t.paid_to = @entity)');
+    clauses.push('(t.paid_by = @entity OR t.paid_to = @entity OR t.paid_for LIKE @entityLike)');
     params.entity = filters.entity;
+    params.entityLike = '%' + filters.entity + '%';
   }
 
   if (filters.category_id) {
@@ -117,7 +99,7 @@ export function getFiltered(filters = {}) {
   const sql = `SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color
     FROM transactions t LEFT JOIN categories c ON t.category_id = c.id ${where}
     ORDER BY t.date DESC, t.id DESC`;
-  return getCachedStmt(sql).all(params);
+  return db.prepare(sql).all(params);
 }
 
 export function getAll() {

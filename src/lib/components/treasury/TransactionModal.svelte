@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { formatDate } from '$lib/utils.js';
   import { ChevronDown, ChevronUp, ArrowUpFromLine, ArrowDownFromLine, ArrowLeftRight } from '@lucide/svelte';
   import { colorValues } from '$lib/shared/colors.js';
@@ -72,10 +72,38 @@
   let category_id = $state(txn?.category_id ?? '');
   let paid_by = $state(txn?.paid_by || '');
   let paid_to = $state(txn?.paid_to || '');
-  let splitMe = $state(txn?.paid_for?.split(',').includes('Me') ?? false);
-  let splitFamily = $state(txn?.paid_for?.split(',').includes('Family') ?? false);
-  let splitSister = $state(txn?.paid_for?.split(',').includes('Sister') ?? false);
-  let splitWife = $state(txn?.paid_for?.split(',').includes('Wife') ?? false);
+  let selectedSplits = $state(
+    txn?.paid_for ? txn.paid_for.split(',').map(s => s.trim()).filter(Boolean) : []
+  );
+  const orderMap = { 'Me': 0, 'Wife': 1, 'Junior': 2, 'Sister': 3, 'Family': 4 };
+  let splitOptions = $derived(
+    ['Me', ...people.filter(p => p.show_in_summary === 1).map(p => p.name)]
+      .sort((a, b) => (orderMap[a] ?? 99) - (orderMap[b] ?? 99))
+  );
+
+  function getPersonColor(name) {
+    if (name === 'Me') {
+      return { border: 'var(--blue)', text: 'var(--blue)', bg: 'rgba(0,136,255,0.12)' };
+    }
+    const p = people.find(x => x.name === name);
+    if (!p) {
+      return { border: 'var(--cyan)', text: 'var(--cyan)', bg: 'rgba(0,212,255,0.12)' };
+    }
+    const colorVal = colorValues[p.color] || 'var(--cyan)';
+    return {
+      border: colorVal,
+      text: colorVal,
+      bg: colorVal.startsWith('#') ? `${colorVal}22` : 'rgba(0,212,255,0.12)'
+    };
+  }
+
+  function toggleSplit(personName) {
+    if (selectedSplits.includes(personName)) {
+      selectedSplits = selectedSplits.filter(n => n !== personName);
+    } else {
+      selectedSplits = [...selectedSplits, personName];
+    }
+  }
   let notes = $state(txn?.notes || '');
 
   let showTypeSelect = $state(false);
@@ -173,25 +201,12 @@
     }
   }
 
-  const personColors = {
-    Me: { border: 'var(--blue)', text: 'var(--blue)', bg: 'rgba(0,136,255,0.12)' },
-    Family: { border: 'var(--amber)', text: 'var(--amber)', bg: 'rgba(255,140,0,0.12)' },
-    Sister: { border: 'var(--purple)', text: 'var(--purple)', bg: 'rgba(168,85,247,0.12)' },
-    Wife: { border: 'var(--cyan)', text: 'var(--cyan)', bg: 'rgba(0,212,255,0.12)' }
-  };
-
   if (!date) {
     const d = new Date();
     date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   function submit() {
-    const paidForParts = [];
-    if (splitMe) paidForParts.push('Me');
-    if (splitFamily) paidForParts.push('Family');
-    if (splitSister) paidForParts.push('Sister');
-    if (splitWife) paidForParts.push('Wife');
-
     onsave({
       date,
       title,
@@ -200,7 +215,7 @@
       category_id: category_id || null,
       paid_by,
       paid_to,
-      paid_for: paidForParts.join(','),
+      paid_for: selectedSplits.join(','),
       notes
     });
   }
@@ -352,12 +367,12 @@
       <div class="field field-pf">
         <span class="field-label">Split</span>
         <div class="chip-row">
-          {#each ['Me', 'Family', 'Sister', 'Wife'] as person}
-            {@const c = personColors[person]}
-            {@const isActive = person === 'Me' ? splitMe : person === 'Family' ? splitFamily : person === 'Sister' ? splitSister : splitWife}
+          {#each splitOptions as person}
+            {@const c = getPersonColor(person)}
+            {@const isActive = selectedSplits.includes(person)}
             <button type="button" class="chip" class:active={isActive}
               style={isActive ? `border-color:${c.border};color:${c.text};background:${c.bg}` : ''}
-              onclick={() => { if (person === 'Me') splitMe = !splitMe; else if (person === 'Family') splitFamily = !splitFamily; else if (person === 'Sister') splitSister = !splitSister; else splitWife = !splitWife; }}>
+              onclick={() => toggleSplit(person)}>
               {person}
             </button>
           {/each}

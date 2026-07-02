@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { Plus, ArrowUpDown, LayoutGrid, Table, Pencil, Trash2, Star, Flame, ListChecks, Minimize2, Equal, Maximize2, Filter, X } from '@lucide/svelte';
   import { notify } from '$lib/stores/notification.js';
   import { invalidate } from '$app/navigation';
@@ -13,6 +13,12 @@
   let books = $state(data.books);
   let genres = $state(data.genres);
   let allSeries = $state(data.series);
+
+  $effect(() => {
+    books = data.books;
+    genres = data.genres;
+    allSeries = data.series;
+  });
 
   let genreFilter = $state(null);
   let deleteItem = $state(null);
@@ -118,8 +124,6 @@
   async function handleDetailClose() {
     activeBook = undefined;
     await invalidate('lounge:data');
-    const res = await fetch('/lounge/books');
-    if (res.ok) books = await res.json();
   }
 
   function statusLabel(s) {
@@ -254,7 +258,7 @@
 
 {#if deleteItem}
   <Modal open={true} noHeader={true} compact onclose={() => { deleteItem = null; }}>
-    <DeleteConfirm title="Delete Book" client={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={(id) => handleDelete(id)} oncancel={() => { deleteItem = null; }} />
+    <DeleteConfirm title="Delete Book" item={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={(id) => handleDelete(id)} oncancel={() => { deleteItem = null; }} />
   </Modal>
 {/if}
 

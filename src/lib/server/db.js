@@ -81,6 +81,7 @@ function initDb() {
       icon TEXT DEFAULT 'User',
       color TEXT DEFAULT '--cyan',
       show_in_summary INTEGER DEFAULT 1,
+      include_in_split INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -357,6 +358,51 @@ function initDb() {
   try { db.exec("INSERT OR IGNORE INTO title_cleanup (source, cleaned) VALUES ('dummy_init', 'dummy_init')"); db.exec("DELETE FROM title_cleanup WHERE source = 'dummy_init'"); } catch {}
   try { db.exec("ALTER TABLE import_log ADD COLUMN merge_count INTEGER DEFAULT 0"); } catch {}
   try { db.exec("ALTER TABLE academy_areas ADD COLUMN cover_url TEXT DEFAULT ''"); } catch {}
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS test_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+        project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        platform_name TEXT NOT NULL,
+        run_name TEXT NOT NULL,
+        url TEXT DEFAULT '',
+        username TEXT DEFAULT '',
+        password TEXT DEFAULT '',
+        research_notes TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+  } catch (e) {
+    console.error("Error creating test_runs table:", e);
+  }
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS test_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_run_id INTEGER REFERENCES test_runs(id) ON DELETE CASCADE,
+        criteria_id INTEGER NOT NULL,
+        stage TEXT NOT NULL,
+        pain_point TEXT DEFAULT '',
+        what_to_test TEXT NOT NULL,
+        expected_outcome TEXT NOT NULL,
+        test_role TEXT DEFAULT '',
+        severity TEXT DEFAULT 'Important',
+        status TEXT DEFAULT 'pending',
+        notes_gap TEXT DEFAULT '',
+        screenshot_path TEXT DEFAULT '',
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(test_run_id, criteria_id)
+      );
+    `);
+  } catch (e) {
+    console.error("Error creating test_results table:", e);
+  }
+  try { db.exec("ALTER TABLE test_runs ADD COLUMN url TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE test_runs ADD COLUMN username TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE test_runs ADD COLUMN password TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE test_runs ADD COLUMN research_notes TEXT DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE academy_areas ADD COLUMN priority TEXT DEFAULT 'medium'"); } catch {}
   try { db.exec("ALTER TABLE academy_courses ADD COLUMN started_on TEXT DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE academy_courses ADD COLUMN completed_on TEXT DEFAULT ''"); } catch {}
@@ -370,6 +416,7 @@ function initDb() {
   try { db.exec("ALTER TABLE client_files ADD COLUMN internal_path TEXT"); } catch {}
   try { db.exec("ALTER TABLE client_files ADD COLUMN content_markdown TEXT"); } catch {}
   try { db.exec("ALTER TABLE book_series ADD COLUMN source_url TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE people ADD COLUMN include_in_split INTEGER DEFAULT 1"); } catch {}
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS token_usage_log (

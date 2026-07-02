@@ -2,9 +2,9 @@
   import { Link, LoaderCircle, Check, AlertCircle } from '@lucide/svelte';
   import AnimeNameSearch from './AnimeNameSearch.svelte';
 
-  let { onscraped } = $props();
+  let { onscraped, initialUrl = '', renderResultsExternal = false, onsearchresults, onsearchloading, onsearcherror } = $props();
 
-  let url = $state('');
+  let url = $state(initialUrl);
   let loading = $state(false);
   let error = $state('');
   let scraped = $state(false);
@@ -69,7 +69,7 @@
     </div>
   {/if}
 
-  <AnimeNameSearch {onscraped} />
+  <AnimeNameSearch {onscraped} {renderResultsExternal} {onsearchresults} {onsearchloading} {onsearcherror} />
 </div>
 
 <style>

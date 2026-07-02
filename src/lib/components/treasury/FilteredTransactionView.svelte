@@ -270,7 +270,7 @@
   <div data-section="delete-backdrop" class="backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) closeDelete(); }}>
     <div data-section="modal" class="modal modal-delete compact" role="dialog" aria-modal="true">
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm client={{ name: deleteTarget.title, id: deleteTarget.id }} title="Delete Transaction"
+        <DeleteConfirm item={{ name: deleteTarget.title, id: deleteTarget.id }} title="Delete Transaction"
           onconfirm={handleDelete} oncancel={closeDelete} />
       </div>
     </div>
@@ -281,7 +281,7 @@
   <div data-section="bulk-delete-backdrop" class="backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) closeBulkDelete(); }}>
     <div data-section="modal" class="modal modal-delete compact" role="dialog" aria-modal="true">
       <div data-label="modal-body" class="modal-body">
-        <DeleteConfirm client={{ name: bulkDeleteTarget.length + ' transactions' }} title="Delete Multiple Transactions"
+        <DeleteConfirm item={{ name: bulkDeleteTarget.length + ' transactions' }} title="Delete Multiple Transactions"
           onconfirm={handleBulkDelete} oncancel={closeBulkDelete} />
       </div>
     </div>

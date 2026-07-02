@@ -1,79 +1,52 @@
-﻿<script>
-  import { CircleCheck, LoaderCircle, FileAudio } from '@lucide/svelte';
-
-  let { status, fileName = '', fileSize = 0, stagePercent = {}, stageLabels = {}, elapsed = '', infoText = '', llmEnabled = false } = $props();
+<script>
+  let { status, fileName = '', fileSize = 0, elapsed = '', percent = 0 } = $props();
 
   let formattedSize = $derived(fileSize > 1024 * 1024
     ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
     : `${(fileSize / 1024).toFixed(1)} KB`
   );
 
-  let uploadPct = $derived(stagePercent.upload ?? 0);
-  let transcribePct = $derived(stagePercent.transcribe ?? 0);
-  let llmPct = $derived(stagePercent.llm ?? 0);
-  let cleanupPct = $derived(stagePercent.cleanup ?? 0);
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
 
-  let overallPercent = $derived.by(() => {
-    if (status === 'complete' || cleanupPct >= 100) return 100;
-    if (cleanupPct > 0) return 95 + (cleanupPct * 0.05);
-    if (llmPct > 0 && llmEnabled) return 75 + (llmPct * 0.2);
-    if (transcribePct > 0) return 20 + (transcribePct * 0.75);
-    if (uploadPct > 0) return uploadPct * 0.2;
-    return 0;
-  });
+  let progressOffset = $derived(circumference - (percent / 100) * circumference);
 
-  let statusLabelText = $derived.by(() => {
-    if (status === 'ready') return 'Ready';
-    if (status === 'uploading') return stageLabels.upload || 'Uploading and converting audio...';
-    if (status === 'transcribing') return stageLabels.transcribe || 'Transcribing via ElevenLabs Scribe...';
-    if (status === 'llm') return stageLabels.llm || 'LLM post-processing...';
-    if (status === 'cleanup') return stageLabels.cleanup || 'Cleaning up files...';
-    if (status === 'complete') return 'Transcription Completed';
-    return 'Processing...';
-  });
+  let isActive = $derived(status === 'uploading' || status === 'transcribing');
+  let isComplete = $derived(status === 'complete');
+
+  let strokeColor = $derived(isComplete ? 'var(--success)' : 'var(--cyan)');
 </script>
 
 <div data-section="transcription-progress" class="progress-panel">
-  <div class="progress-header">
-    <div class="status-icon" class:icon-active={status !== 'complete' && status !== 'ready'} class:icon-done={status === 'complete'}>
-      {#if status === 'complete'}
-        <CircleCheck size={20} />
-      {:else}
-        <LoaderCircle size={20} />
+  <div class="progress-grid">
+    <div class="circle-col">
+      <svg viewBox="0 0 100 100" class="progress-ring">
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border)" stroke-width="6" />
+        <circle cx="50" cy="50" r={radius} fill="none" stroke={strokeColor} stroke-width="6"
+          stroke-linecap="round"
+          stroke-dasharray={circumference}
+          stroke-dashoffset={progressOffset}
+          transform="rotate(-90 50 50)"
+          class:progress-arc={isActive}
+        />
+        {#if isActive}
+          <circle cx="50" cy="12" r="4" fill={strokeColor} class="orbit-dot" />
+        {:else if isComplete}
+          <circle cx="50" cy="12" r="4" fill={strokeColor} />
+        {/if}
+      </svg>
+      <div class="percent-label" class:pct-complete={isComplete}>{percent.toFixed(0)}%</div>
+    </div>
+    <div class="info-col">
+      <div class="file-name" title={fileName}>{fileName}</div>
+      {#if fileSize > 0}
+        <div class="file-size">{formattedSize}</div>
       {/if}
     </div>
-    <span class="progress-title">ElevenLabs Transcription</span>
-    {#if elapsed}
-      <span class="elapsed-badge">{elapsed}</span>
-    {/if}
-  </div>
-
-  {#if infoText || statusLabelText}
-    <div data-section="progress-info" class="info-banner">
-      <span class="info-text">{infoText || statusLabelText}</span>
-    </div>
-  {/if}
-
-  <div class="file-details">
-    <FileAudio size={16} />
-    <span class="file-name" title={fileName}>{fileName}</span>
-    {#if fileSize > 0}
-      <span class="file-size">({formattedSize})</span>
-    {/if}
-  </div>
-
-  <div class="progress-track-container">
-    <div class="progress-track">
-      <div
-        class="progress-fill"
-        class:fill-done={status === 'complete'}
-        class:fill-active={status !== 'complete' && status !== 'ready'}
-        style="width: {overallPercent}%"
-      ></div>
-    </div>
-    <div class="progress-labels">
-      <span class="progress-status-text">{statusLabelText}</span>
-      <span class="progress-percent-text">{overallPercent.toFixed(0)}%</span>
+    <div class="timer-col">
+      {#if elapsed}
+        <span class="timer-label">{elapsed}</span>
+      {/if}
     </div>
   </div>
 </div>
@@ -84,141 +57,89 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
   }
 
-  .progress-header {
-    display: flex;
+  .progress-grid {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
     align-items: center;
-    gap: 10px;
-    color: var(--cyan);
   }
 
-  .status-icon {
+  .circle-col {
+    position: relative;
+    width: 90px;
+    height: 90px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
-    transition: color 0.3s;
   }
-  .icon-active {
-    color: var(--cyan);
+
+  .progress-ring {
+    width: 90px;
+    height: 90px;
+  }
+
+  .progress-arc {
+    transition: stroke-dashoffset 0.4s ease;
+  }
+
+  .orbit-dot {
+    transform-origin: 50px 50px;
     animation: spin 2s linear infinite;
-  }
-  .icon-done {
-    color: var(--success);
   }
 
   @keyframes spin {
     100% { transform: rotate(360deg); }
   }
 
-  .progress-title {
+  .percent-label {
+    position: absolute;
     font-family: var(--font-heading-1);
-    font-size: var(--fs-heading-2);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    flex: 1;
+    font-size: var(--fs-section);
+    font-weight: 700;
+    color: var(--cyan);
+    pointer-events: none;
   }
 
-  .elapsed-badge {
-    font-family: var(--font-body);
-    font-size: var(--fs-caption);
-    font-weight: 600;
+  .pct-complete {
     color: var(--success);
-    padding: 2px 10px;
-    border: 1px solid var(--success);
-    border-radius: var(--radius);
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
   }
 
-  .file-details {
-    font-family: var(--font-body);
-    font-size: var(--fs-body);
-    color: var(--text-dim);
+  .info-col {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.01);
-    padding: 8px 12px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
   }
 
   .file-name {
+    font-family: var(--font-body);
+    font-size: var(--fs-body);
     font-weight: 600;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 450px;
   }
 
   .file-size {
-    color: var(--text-muted);
-  }
-
-  .progress-track-container {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .progress-track {
-    height: 6px;
-    background: var(--border);
-    border-radius: 3px;
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .progress-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.3s ease;
-  }
-  .progress-fill.fill-active {
-    background: var(--cyan);
-    box-shadow: 0 0 8px var(--cyan-glow);
-  }
-  .progress-fill.fill-done {
-    background: var(--success);
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-  }
-
-  .progress-labels {
-    display: flex;
-    justify-content: space-between;
     font-family: var(--font-body);
-    font-size: var(--fs-caption);
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  .progress-status-text {
-    color: var(--cyan);
-  }
-  .progress-percent-text {
+    font-size: var(--fs-small);
     color: var(--text-dim);
   }
 
-  .info-banner {
+  .timer-col {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--cyan-dim);
-    border-radius: var(--radius);
+    justify-content: flex-end;
   }
-  .info-text {
-    font-family: var(--font-body);
-    font-size: var(--fs-body);
+
+  .timer-label {
+    font-family: var(--font-heading-1);
+    font-size: var(--fs-heading-2);
     font-weight: 600;
     color: var(--cyan);
+    white-space: nowrap;
   }
 </style>

@@ -5,8 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "set NODE_OPTIONS=--unhandled-rejections=warn && vite dev",
-		"build": "vite build",
-		"check": "svelte-check",
+		"build": "node scripts/check-typography.js && vite build",
+		"check": "svelte-check && node scripts/check-typography.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''"
 	},
@@ -23,6 +23,7 @@
 		"@lucide/svelte": "^1.17.0",
 		"better-sqlite3": "^12.10.0",
 		"pdf-parse": "^2.4.5",
+		"playwright": "^1.61.1",
 		"xlsx": "^0.18.5"
 	}
 }

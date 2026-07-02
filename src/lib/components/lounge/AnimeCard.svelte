@@ -68,22 +68,33 @@
         </span>
       {/if}
     </div>
-    {#if visibleProps.genres && anime.genres?.length}
+    {#if visibleProps.genres}
       <div data-label="card-genres" class="card-genres">
-        {#each anime.genres.slice(0, 3) as g}
-          <span class="genre-tag">{g.name}</span>
-        {/each}
-        {#if anime.genres.length > 3}
-          <span class="genre-tag more">+{anime.genres.length - 3}</span>
+        {#if anime.genres?.length}
+          <div class="card-genres-inner">
+            {#each anime.genres.slice(0, 2) as g}
+              <span class="genre-tag">{g.name}</span>
+            {/each}
+          </div>
+          {#if anime.genres.length > 2}
+            <span class="genre-tag more">+{anime.genres.length - 2}</span>
+          {/if}
         {/if}
       </div>
     {/if}
-    {#if visibleProps.progress && anime.total_episodes > 0}
+    {#if visibleProps.progress}
       <div class="card-progress">
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: {(anime.total_watched / anime.total_episodes * 100)}%"></div>
-        </div>
-        <span class="progress-text">{anime.total_watched}/{anime.total_episodes}</span>
+        {#if anime.total_episodes > 0}
+          <div class="progress-bar">
+            {#if anime.total_watched > 0}
+              <div class="progress-fill" style="width: {(anime.total_watched / anime.total_episodes * 100)}%"></div>
+            {/if}
+          </div>
+          <span class="progress-text">{anime.total_watched}/{anime.total_episodes}</span>
+        {:else}
+          <div class="progress-bar empty"></div>
+          <span class="progress-text placeholder">&mdash;</span>
+        {/if}
       </div>
     {/if}
   </div>
@@ -153,7 +164,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 55px;
+    height: 65px;
   }
 
   .action-btn {
@@ -208,11 +219,21 @@
 
   .card-genres {
     display: flex;
-    flex-wrap: wrap;
     gap: 4px;
+    overflow: hidden;
+    height: 40px;
+    align-items: center;
+  }
+
+  .card-genres-inner {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .genre-tag {
+    flex-shrink: 0;
     padding: 1px 6px;
     border-radius: var(--radius);
     background: rgba(0, 212, 255, 0.08);
@@ -222,7 +243,12 @@
     font-size: var(--fs-body);
   }
 
-  .genre-tag.more { opacity: 0.7; }
+  .genre-tag.more {
+    flex-shrink: 0;
+  }
+
+  .progress-bar.empty { opacity: 0.3; }
+  .progress-text.placeholder { opacity: 0.3; }
 
   .card-progress {
     display: flex;
@@ -253,14 +279,14 @@
   }
 
   .density-compact .card-body { padding: 8px; gap: 4px; }
-  .density-compact .card-title { font-size: var(--fs-body); min-height: 40px; }
+  .density-compact .card-title { font-size: var(--fs-body); height: 46px; }
   .density-compact .status-pill { font-size: var(--fs-body); }
   .density-compact .genre-tag { font-size: var(--fs-body); }
   .density-compact .progress-text { font-size: var(--fs-body); }
   .density-compact .card-meta { gap: 4px; min-height: 20px; }
 
   .density-large .card-body { padding: 16px; gap: 10px; }
-  .density-large .card-title { font-size: var(--fs-body); min-height: 60px; }
+  .density-large .card-title { font-size: var(--fs-body); height: 69px; }
   .density-large .status-pill { font-size: var(--fs-body); }
   .density-large .genre-tag { font-size: var(--fs-body); }
   .density-large .progress-text { font-size: var(--fs-body); }

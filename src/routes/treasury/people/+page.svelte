@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { Plus, X, Pencil, Trash2, TrendingUp, TrendingDown } from '@lucide/svelte';
   import { colorValues } from '$lib/shared/colors.js';
   import DynamicIcon from '$lib/components/operations/DynamicIcon.svelte';
@@ -7,6 +7,12 @@
 
   let { data } = $props();
   let people = $state(data.people);
+  const orderMap = { 'Me': 0, 'Wife': 1, 'Junior': 2, 'Sister': 3, 'Family': 4 };
+  let sortedPeople = $derived(
+    people
+      .filter(p => orderMap[p.name] !== undefined)
+      .sort((a, b) => orderMap[a.name] - orderMap[b.name])
+  );
   let showModal = $state(false);
   let editingPerson = $state(null);
   let deleteTarget = $state(null);
@@ -62,11 +68,11 @@
     <button type="button" class="btn-add" onclick={openAdd}><Plus size={18} /> Add Person</button>
   </div>
 
-  {#if people.length === 0}
+  {#if sortedPeople.length === 0}
     <div class="empty-state"><p>No people yet.</p></div>
   {:else}
     <div data-section="people-cards" class="card-grid">
-      {#each people as p (p.id)}
+      {#each sortedPeople as p (p.id)}
         <a href="/treasury/people/{p.id}" class="card">
           <div class="card-actions" role="presentation" onclick={(e) => e.preventDefault()}>
             <button type="button" class="action-btn" onclick={() => openEdit(p)}><Pencil size={16} /></button>
@@ -116,7 +122,7 @@
     <div data-section="modal" class="modal modal-delete compact" role="dialog" aria-modal="true">
       <div data-label="modal-body" class="modal-body">
         <DeleteConfirm
-          client={{ name: deleteTarget.name, id: deleteTarget.id }}
+          item={{ name: deleteTarget.name, id: deleteTarget.id }}
           title="Delete Person"
           onconfirm={handleDelete}
           oncancel={closeDelete}
