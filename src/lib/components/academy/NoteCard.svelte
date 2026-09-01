@@ -6,7 +6,7 @@
   let hasActions = $derived(!!onedit || !!ondelete);
 </script>
 
-<div class="note-card density-{density}" data-item={note.id}>
+<a href="/academy/notes/{note.id}" class="note-card density-{density}" data-item={note.id}>
   <div class="note-info">
     <FileText size={15} />
     <div class="note-meta">
@@ -33,7 +33,7 @@
       {/if}
     </div>
   {/if}
-</div>
+</a>
 
 <style>
   .note-card {
@@ -41,6 +41,7 @@
     padding: 10px 16px; background: var(--bg-card);
     border: 1px solid var(--border); border-radius: var(--radius);
     transition: border-color 0.2s;
+    text-decoration: none; color: inherit;
   }
   .note-card:hover { border-color: var(--cyan); }
   .note-info { flex: 1; display: flex; align-items: center; gap: 8px; }

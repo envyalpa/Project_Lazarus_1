@@ -33,9 +33,7 @@
   }
 
   function noteHref(note) {
-    if (note.course_id) return `/academy/${note.area_id}/course/${note.course_id}`;
-    if (note.area_id) return `/academy/${note.area_id}`;
-    return '/academy/notes';
+    return `/academy/notes/${note.id}`;
   }
 </script>
 
@@ -62,9 +60,7 @@
     {:else if viewMode === 'card'}
       <div class="note-grid density-{cardDensity}">
         {#each sorted as note (note.id)}
-          <a href={noteHref(note)} class="note-link">
-            <NoteCard {note} areaName={note.area_name} courseName={note.course_name} />
-          </a>
+          <NoteCard {note} areaName={note.area_name} courseName={note.course_name} />
         {/each}
       </div>
     {:else}
@@ -106,9 +102,6 @@
   .note-grid.density-compact { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
   .note-grid.density-normal { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
   .note-grid.density-large { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
-
-  .note-link { text-decoration: none; color: inherit; display: block; }
-  .note-link:hover .note-card { border-color: var(--cyan); }
 
   .list-view { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .list-header {

@@ -48,7 +48,7 @@ export function getByCourse(courseId) {
   return stmts.getByCourse.all(courseId);
 }
 
-function getById(id) {
+export function getById(id) {
   return stmts.getById.get(id) || null;
 }
 
