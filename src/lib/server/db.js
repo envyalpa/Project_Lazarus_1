@@ -187,6 +187,102 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      total_volumes INTEGER DEFAULT 0,
+      icon TEXT DEFAULT 'BookMarked',
+      color TEXT DEFAULT '--cyan',
+      description TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS anime_series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      cover_url TEXT DEFAULT '',
+      rating TEXT DEFAULT NULL,
+      status TEXT DEFAULT 'not_started',
+      notes TEXT DEFAULT '',
+      synopsis TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS anime_seasons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      anime_id INTEGER NOT NULL REFERENCES anime_series(id) ON DELETE CASCADE,
+      season_number INTEGER NOT NULL,
+      total_episodes INTEGER DEFAULT 0,
+      episodes_watched INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(anime_id, season_number)
+    );
+
+    CREATE TABLE IF NOT EXISTS book_series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      author TEXT DEFAULT '',
+      cover_url TEXT DEFAULT '',
+      rating TEXT DEFAULT NULL,
+      status TEXT DEFAULT 'not_started',
+      synopsis TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      start_date TEXT,
+      end_date TEXT,
+      series_id INTEGER REFERENCES series(id),
+      volume_number INTEGER DEFAULT 0,
+      total_volumes INTEGER DEFAULT 0,
+      source_url TEXT DEFAULT '',
+      processed INTEGER DEFAULT 0,
+      edi_correct_title INTEGER DEFAULT 0,
+      edi_correct_author INTEGER DEFAULT 0,
+      edi_correct_series INTEGER DEFAULT 0,
+      edi_correct_genres INTEGER DEFAULT 0,
+      edi_correct_synopsis INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS academy_areas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      icon TEXT DEFAULT 'BookOpen',
+      color TEXT DEFAULT '--cyan',
+      cover_url TEXT DEFAULT '',
+      priority TEXT DEFAULT 'medium',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS academy_courses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      area_id INTEGER REFERENCES academy_areas(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      status TEXT DEFAULT 'in-progress',
+      started_on TEXT DEFAULT '',
+      completed_on TEXT DEFAULT '',
+      course_url TEXT DEFAULT '',
+      cover_image TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS academy_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      area_id INTEGER REFERENCES academy_areas(id) ON DELETE SET NULL,
+      course_id INTEGER REFERENCES academy_courses(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      content TEXT DEFAULT '{}',
+      view_mode TEXT DEFAULT 'wide',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_series_title ON anime_series(title COLLATE NOCASE);
+
     CREATE TABLE IF NOT EXISTS story_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -355,9 +451,29 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  function patch(sql) {
+    try {
+      db.exec(sql);
+    } catch (e) {
+      if (!/duplicate column name/i.test(e.message)) {
+        console.error('[db] schema patch failed:', sql.slice(0, 80), '->', e.message);
+      }
+    }
+  }
+
+  patch("ALTER TABLE projects ADD COLUMN icon TEXT DEFAULT 'FolderKanban'")
+  patch("ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER")
+  patch("ALTER TABLE time_entries ADD COLUMN title TEXT DEFAULT ''")
+  patch("ALTER TABLE time_entries ADD COLUMN project_id INTEGER")
+  patch("ALTER TABLE time_entries ADD COLUMN start_time TEXT DEFAULT ''")
+  patch("ALTER TABLE time_entries ADD COLUMN end_time TEXT DEFAULT ''")
+  patch("ALTER TABLE time_entries ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))")
+  patch("ALTER TABLE title_cleanup ADD COLUMN confirmed INTEGER DEFAULT 0")
+
   try { db.exec("INSERT OR IGNORE INTO title_cleanup (source, cleaned) VALUES ('dummy_init', 'dummy_init')"); db.exec("DELETE FROM title_cleanup WHERE source = 'dummy_init'"); } catch {}
-  try { db.exec("ALTER TABLE import_log ADD COLUMN merge_count INTEGER DEFAULT 0"); } catch {}
-  try { db.exec("ALTER TABLE academy_areas ADD COLUMN cover_url TEXT DEFAULT ''"); } catch {}
+  patch("ALTER TABLE import_log ADD COLUMN merge_count INTEGER DEFAULT 0")
+  patch("ALTER TABLE academy_areas ADD COLUMN cover_url TEXT DEFAULT ''")
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS test_runs (
@@ -399,24 +515,24 @@ function initDb() {
   } catch (e) {
     console.error("Error creating test_results table:", e);
   }
-  try { db.exec("ALTER TABLE test_runs ADD COLUMN url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE test_runs ADD COLUMN username TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE test_runs ADD COLUMN password TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE test_runs ADD COLUMN research_notes TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE academy_areas ADD COLUMN priority TEXT DEFAULT 'medium'"); } catch {}
-  try { db.exec("ALTER TABLE academy_courses ADD COLUMN started_on TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE academy_courses ADD COLUMN completed_on TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE academy_courses ADD COLUMN course_url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE academy_courses ADD COLUMN cover_image TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE meeting_notes ADD COLUMN transcript TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE contacts ADD COLUMN source_type TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE contacts ADD COLUMN source_id INTEGER"); } catch {}
-  try { db.exec("ALTER TABLE client_files ADD COLUMN task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE"); } catch {}
-  try { db.exec("ALTER TABLE client_files ADD COLUMN is_internal INTEGER DEFAULT 0"); } catch {}
-  try { db.exec("ALTER TABLE client_files ADD COLUMN internal_path TEXT"); } catch {}
-  try { db.exec("ALTER TABLE client_files ADD COLUMN content_markdown TEXT"); } catch {}
-  try { db.exec("ALTER TABLE book_series ADD COLUMN source_url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE people ADD COLUMN include_in_split INTEGER DEFAULT 1"); } catch {}
+  patch("ALTER TABLE test_runs ADD COLUMN url TEXT DEFAULT ''")
+  patch("ALTER TABLE test_runs ADD COLUMN username TEXT DEFAULT ''")
+  patch("ALTER TABLE test_runs ADD COLUMN password TEXT DEFAULT ''")
+  patch("ALTER TABLE test_runs ADD COLUMN research_notes TEXT DEFAULT ''")
+  patch("ALTER TABLE academy_areas ADD COLUMN priority TEXT DEFAULT 'medium'")
+  patch("ALTER TABLE academy_courses ADD COLUMN started_on TEXT DEFAULT ''")
+  patch("ALTER TABLE academy_courses ADD COLUMN completed_on TEXT DEFAULT ''")
+  patch("ALTER TABLE academy_courses ADD COLUMN course_url TEXT DEFAULT ''")
+  patch("ALTER TABLE academy_courses ADD COLUMN cover_image TEXT DEFAULT ''")
+  patch("ALTER TABLE meeting_notes ADD COLUMN transcript TEXT DEFAULT ''")
+  patch("ALTER TABLE contacts ADD COLUMN source_type TEXT DEFAULT ''")
+  patch("ALTER TABLE contacts ADD COLUMN source_id INTEGER")
+  patch("ALTER TABLE client_files ADD COLUMN task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE")
+  patch("ALTER TABLE client_files ADD COLUMN is_internal INTEGER DEFAULT 0")
+  patch("ALTER TABLE client_files ADD COLUMN internal_path TEXT")
+  patch("ALTER TABLE client_files ADD COLUMN content_markdown TEXT")
+  patch("ALTER TABLE book_series ADD COLUMN source_url TEXT DEFAULT ''")
+  patch("ALTER TABLE people ADD COLUMN include_in_split INTEGER DEFAULT 1")
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS token_usage_log (
@@ -461,13 +577,13 @@ function initDb() {
       );
     `);
   } catch {}
-  try { db.exec("ALTER TABLE memory_embeddings ADD COLUMN client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE"); } catch {}
-  try { db.exec("ALTER TABLE memory_embeddings ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE"); } catch {}
-  try { db.exec("ALTER TABLE projects ADD COLUMN codex_markdown TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN codex_markdown TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN dossier_markdown TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN dossier_updated_at TEXT"); } catch {}
-  try { db.exec("ALTER TABLE client_documents ADD COLUMN conversation_id INTEGER REFERENCES client_conversations(id) ON DELETE SET NULL"); } catch {}
+  patch("ALTER TABLE memory_embeddings ADD COLUMN client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE")
+  patch("ALTER TABLE memory_embeddings ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE")
+  patch("ALTER TABLE projects ADD COLUMN codex_markdown TEXT DEFAULT ''")
+  patch("ALTER TABLE clients ADD COLUMN codex_markdown TEXT DEFAULT ''")
+  patch("ALTER TABLE clients ADD COLUMN dossier_markdown TEXT DEFAULT ''")
+  patch("ALTER TABLE clients ADD COLUMN dossier_updated_at TEXT")
+  patch("ALTER TABLE client_documents ADD COLUMN conversation_id INTEGER REFERENCES client_conversations(id) ON DELETE SET NULL")
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS client_conversations (
@@ -481,7 +597,7 @@ function initDb() {
       );
     `);
   } catch {}
-  try { db.exec("ALTER TABLE client_conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"); } catch {}
+  patch("ALTER TABLE client_conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL")
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS authors (
@@ -511,9 +627,9 @@ function initDb() {
       );
     `);
   } catch {}
-  try { db.exec("ALTER TABLE series ADD COLUMN icon TEXT DEFAULT 'BookMarked'"); } catch {}
-  try { db.exec("ALTER TABLE series ADD COLUMN color TEXT DEFAULT '--cyan'"); } catch {}
-  try { db.exec("ALTER TABLE series ADD COLUMN description TEXT DEFAULT ''"); } catch {}
+  patch("ALTER TABLE series ADD COLUMN icon TEXT DEFAULT 'BookMarked'")
+  patch("ALTER TABLE series ADD COLUMN color TEXT DEFAULT '--cyan'")
+  patch("ALTER TABLE series ADD COLUMN description TEXT DEFAULT ''")
   try {
     const genreMigrations = [
       { names: ['fantasy', 'epic fantasy', 'dark fantasy', 'sword and sorcery', 'urban fantasy'], icon: 'Sparkles', color: '--purple' },
@@ -622,12 +738,12 @@ function initDb() {
     `);
   } catch {}
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_tv_shows_title ON tv_shows(title COLLATE NOCASE)'); } catch {}
-  try { db.exec("ALTER TABLE tv_shows ADD COLUMN source_url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE movies ADD COLUMN cover_url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE movies ADD COLUMN synopsis TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE movies ADD COLUMN source_url TEXT DEFAULT ''"); } catch {}
-  try { db.exec("ALTER TABLE movies ADD COLUMN created_at TEXT DEFAULT (datetime('now'))"); } catch {}
-  try { db.exec("ALTER TABLE movies ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"); } catch {}
+  patch("ALTER TABLE tv_shows ADD COLUMN source_url TEXT DEFAULT ''")
+  patch("ALTER TABLE movies ADD COLUMN cover_url TEXT DEFAULT ''")
+  patch("ALTER TABLE movies ADD COLUMN synopsis TEXT DEFAULT ''")
+  patch("ALTER TABLE movies ADD COLUMN source_url TEXT DEFAULT ''")
+  patch("ALTER TABLE movies ADD COLUMN created_at TEXT DEFAULT (datetime('now'))")
+  patch("ALTER TABLE movies ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))")
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS movie_genres (
@@ -738,7 +854,7 @@ function initDb() {
   } catch (e) {
     console.error('Error seeding collectibles:', e);
   }
-  try { db.exec("ALTER TABLE collectible_items ADD COLUMN region TEXT DEFAULT 'US'"); } catch {}
+  patch("ALTER TABLE collectible_items ADD COLUMN region TEXT DEFAULT 'US'")
   try {
     const collection = db.prepare('SELECT id FROM collectible_collections WHERE slug = ?').get('monster-cans');
     if (collection) {
