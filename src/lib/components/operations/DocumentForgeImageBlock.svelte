@@ -14,7 +14,7 @@
 
   let alignment = $derived(block.alignment || 'center');
   let displayWidth = $derived(block.width || null);
-  let isLocalImage = $derived(block.imageUrl?.startsWith('/images/'));
+  let isLocalImage = $derived(/^\/(media|images)\//.test(block.imageUrl || ''));
 
   let resizeState = $state(null);
 

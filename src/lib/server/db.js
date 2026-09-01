@@ -284,6 +284,12 @@ function initDb() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_series_title ON anime_series(title COLLATE NOCASE);
 
+    CREATE TABLE IF NOT EXISTS upload_hashes (
+      hash TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS story_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

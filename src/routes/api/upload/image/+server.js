@@ -1,10 +1,11 @@
 import { json } from '@sveltejs/kit';
-import { writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, statSync, readFileSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join, resolve } from 'path';
 import crypto from 'crypto';
 import db from '$lib/server/db.js';
+import { IMAGES_DIR } from '$lib/server/paths.js';
 
-const UPLOAD_DIR = 'static/images';
+const UPLOAD_DIR = IMAGES_DIR;
 const MAX_SIZE = 20 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/avif', 'image/tiff'];
 
@@ -16,7 +17,9 @@ export async function GET({ url }) {
   const filename = cleanUrl.split('/').pop();
   if (!filename) return json({ references: [] });
 
-  const searchPattern = `%/images/${filename}%`;
+  // Filenames are UUIDs, so matching on the name alone finds references
+  // under both the current /media/ prefix and the legacy /images/ one.
+  const searchPattern = `%${filename}%`;
   const references = [];
 
   function findContent(table, idCol, titleCol, contentCol, joins, contextCol, contextLabel, label, type) {
@@ -96,35 +99,32 @@ export async function POST({ request }) {
   }
 
   if (replace) {
-    const cleanPath = replace.replace(/^\/images\//, '');
+    const cleanPath = replace.replace(/^\/(media|images)\//, '');
     if (cleanPath.includes('..') || cleanPath.includes('/') || cleanPath.includes('\\')) {
       return json({ error: 'Invalid replace path' }, { status: 400 });
     }
     const oldPath = join(UPLOAD_DIR, cleanPath);
     writeFileSync(oldPath, buffer);
-    return json({ url: `/images/${cleanPath}?v=${Date.now()}`, localPath: resolve(oldPath) });
+    return json({ url: `/media/${cleanPath}?v=${Date.now()}`, localPath: resolve(oldPath) });
   }
 
-  // Dedup: check if same file already exists
+  // Dedup by content hash. Looked up in a table rather than by rehashing the
+  // whole upload directory, which grew linearly with every upload.
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-  const existingFiles = readdirSync(UPLOAD_DIR);
-  for (const f of existingFiles) {
-    const existingPath = join(UPLOAD_DIR, f);
-    try {
-      if (statSync(existingPath).isFile()) {
-        const existingBuf = readFileSync(existingPath);
-        const existingHash = crypto.createHash('sha256').update(existingBuf).digest('hex');
-        if (existingHash === hash) {
-          return json({ url: `/images/${f}`, localPath: resolve(existingPath) });
-        }
-      }
-    } catch {}
+  const known = db.prepare('SELECT filename FROM upload_hashes WHERE hash = ?').get(hash);
+  if (known) {
+    const knownPath = join(UPLOAD_DIR, known.filename);
+    if (existsSync(knownPath)) {
+      return json({ url: `/media/${known.filename}`, localPath: resolve(knownPath) });
+    }
+    db.prepare('DELETE FROM upload_hashes WHERE hash = ?').run(hash);
   }
 
   const filename = `${crypto.randomUUID()}.${ext}`;
   const filepath = join(UPLOAD_DIR, filename);
   writeFileSync(filepath, buffer);
-  return json({ url: `/images/${filename}`, localPath: resolve(filepath) });
+  db.prepare('INSERT OR REPLACE INTO upload_hashes (hash, filename) VALUES (?, ?)').run(hash, filename);
+  return json({ url: `/media/${filename}`, localPath: resolve(filepath) });
 }
 
 export async function DELETE({ request }) {
@@ -134,14 +134,15 @@ export async function DELETE({ request }) {
       return json({ error: 'No url provided' }, { status: 400 });
     }
 
-    if (url.startsWith('/images/')) {
-      const cleanPath = url.split('?')[0].replace(/^\/images\//, '');
+    if (url.startsWith('/media/') || url.startsWith('/images/')) {
+      const cleanPath = url.split('?')[0].replace(/^\/(media|images)\//, '');
       if (cleanPath.includes('..') || cleanPath.includes('/') || cleanPath.includes('\\')) {
         return json({ error: 'Invalid path' }, { status: 400 });
       }
       const filepath = join(UPLOAD_DIR, cleanPath);
       if (existsSync(filepath)) {
         unlinkSync(filepath);
+        db.prepare('DELETE FROM upload_hashes WHERE filename = ?').run(cleanPath);
         console.log(`[API] Deleted local image: ${filepath}`);
       }
     }

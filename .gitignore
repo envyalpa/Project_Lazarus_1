@@ -25,6 +25,7 @@ vite.config.ts.timestamp-*
 
 # Runtime Database & Media
 data/
+static/images/
 
 # Machine Learning Models
 /models/

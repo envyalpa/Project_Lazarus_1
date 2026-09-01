@@ -1,10 +1,9 @@
 import { readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-
-const UPLOAD_DIR = 'static/images';
+import { IMAGES_DIR } from '$lib/server/paths.js';
 
 export function load() {
-  const dirPath = join(process.cwd(), UPLOAD_DIR);
+  const dirPath = IMAGES_DIR;
   let files = [];
   try {
     const entries = readdirSync(dirPath);
@@ -18,7 +17,7 @@ export function load() {
         ext,
         size: stat.size,
         lastModified: stat.mtime.toISOString(),
-        url: `/images/${name}`,
+        url: `/media/${name}`,
         localPath: resolve(fullPath)
       });
     }

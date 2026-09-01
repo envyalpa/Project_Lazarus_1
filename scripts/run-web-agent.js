@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { callLlm, getInteractiveElements } from './agent-utils.js';
-import { DB_PATH, AGENT_LOGS_DIR } from '../src/lib/server/paths.js';
+import { DB_PATH, AGENT_LOGS_DIR, IMAGES_DIR } from '../src/lib/server/paths.js';
 
 const args = {};
 process.argv.slice(2).forEach(val => {
@@ -298,7 +298,7 @@ Return ONLY JSON: {
     }
 
     // ── 3. Execution Loop ──
-    const uploadDir = join(process.cwd(), 'static', 'images');
+    const uploadDir = IMAGES_DIR;
     if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
 
     while (true) {
@@ -367,7 +367,7 @@ Decide the next action. Return ONLY JSON: {
           const filepath = join(uploadDir, filename);
           try { await page.screenshot({ path: filepath }); } catch {}
 
-          db.prepare("UPDATE test_results SET status = ?, notes_gap = ?, screenshot_path = ?, updated_at = datetime('now') WHERE id = ?").run(verdict, gapNotes, `/images/${filename}`, r.id);
+          db.prepare("UPDATE test_results SET status = ?, notes_gap = ?, screenshot_path = ?, updated_at = datetime('now') WHERE id = ?").run(verdict, gapNotes, `/media/${filename}`, r.id);
           log(`  ✓ Test #${r.criteria_id}: ${verdict.toUpperCase()} — ${gapNotes}`);
         }
       }

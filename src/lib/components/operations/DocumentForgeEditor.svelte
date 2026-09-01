@@ -618,12 +618,15 @@
     handleInput();
   }
 
+  // Uploads are served from /media/; /images/ is the legacy prefix.
+  const isLocalUpload = (src) => /^\/(media|images)\//.test(src || '');
+
   function scanImageUrls() {
     prevImageUrls.clear();
     if (!editorEl) return;
     editorEl.querySelectorAll('img').forEach(img => {
       const src = img.getAttribute('src') || '';
-      if (src.startsWith('/images/')) prevImageUrls.add(src);
+      if (isLocalUpload(src)) prevImageUrls.add(src);
     });
   }
 
@@ -632,7 +635,7 @@
     const currentUrls = new Set();
     editorEl.querySelectorAll('img').forEach(img => {
       const src = img.getAttribute('src') || '';
-      if (src.startsWith('/images/')) currentUrls.add(src);
+      if (isLocalUpload(src)) currentUrls.add(src);
     });
     for (const url of prevImageUrls) {
       if (!currentUrls.has(url)) {
@@ -757,7 +760,7 @@
     triggerChange();
 
     // Silently delete local file if it's a locally uploaded image
-    if (src.startsWith('/images/')) {
+    if (isLocalUpload(src)) {
       try {
         await fetch('/api/upload/image', {
           method: 'DELETE',
