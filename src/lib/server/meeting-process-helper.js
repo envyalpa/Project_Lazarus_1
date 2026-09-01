@@ -4,6 +4,7 @@ import { getByClient as getContactsByClient } from './contacts.js';
 import { getByClient as getTasksByClient } from './tasks.js';
 import db from './db.js';
 import { getCodex } from './codex-helper.js';
+import { callAgent } from './llm.js';
 
 function isSimilarTitle(a, b) {
   if (!a || !b) return false;
@@ -268,127 +269,25 @@ Do not summarize briefly; ensure no important details from the transcript are om
   }
 
   const userPrompt = `Related Project History:\n${memoryContextText}\n\nMeeting Details:\nTitle: ${title}\nDate: ${meetingDate}\n\nTranscript:\n${transcript}`;
-  const rawProvider = config.agentProvider || 'gemini';
-  const rawModel = config.agentModel || 'models/gemini-1.5-flash';
-  const provider = rawProvider === 'gemini' ? 'google' : rawProvider;
-  const model = rawModel.replace(/^models\//, '');
+  const provider = (config.agentProvider || 'gemini') === 'gemini' ? 'google' : (config.agentProvider || 'gemini');
+  const model = (config.agentModel || 'models/gemini-1.5-flash').replace(/^models\//, '');
 
-  if (provider === 'google' && !config.googleApiKey) throw new Error('Google API Key not configured.');
-  if (provider === 'deepseek' && !config.deepseekApiKey) throw new Error('DeepSeek API Key not configured.');
-  if (provider === 'nvidia' && !config.nvidiaApiKey) throw new Error('NVIDIA API Key not configured.');
-  if (provider === 'openrouter' && !config.openrouterApiKey) throw new Error('OpenRouter API Key not configured.');
-  if (provider === 'groq' && !config.groqApiKey) throw new Error('Groq API Key not configured.');
-  if (provider === 'opencode' && !config.opencodeApiKey) throw new Error('OpenCode Go API Key not configured.');
-
-  let promptTokens = 0, completionTokens = 0, responseText = '';
-  if (provider === 'google') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.googleApiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      }),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`Google API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    promptTokens = data.usageMetadata?.promptTokenCount || 0;
-    completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
-  } else if (provider === 'nvidia') {
-    const url = (config.nvidiaApiBaseUrl || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '') + '/chat/completions';
-    const bodyPayload = {
-      model,
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-      response_format: { type: 'json_object' }
-    };
-    if (model === 'google/diffusiongemma-26b-a4b-it') {
-      bodyPayload.chat_template_kwargs = { enable_thinking: true };
+  let responseText, usage;
+  try {
+    ({ text: responseText, usage } = await callAgent({
+      system: systemPrompt,
+      user: userPrompt,
+      json: true,
+      timeout: 300000
+    }));
+  } catch (err) {
+    if (err.name === 'AbortError' || /aborted due to timeout/i.test(err.message || '')) {
+      throw new Error('EDI timed out analysing this transcript (5 min). Try a Deep Review, a shorter transcript, or reprocess.');
     }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nvidiaApiKey}` },
-      body: JSON.stringify(bodyPayload),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`NVIDIA API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.choices?.[0]?.message?.content || '';
-    promptTokens = data.usage?.prompt_tokens || 0;
-    completionTokens = data.usage?.completion_tokens || 0;
-  } else if (provider === 'openrouter') {
-    const url = 'https://openrouter.ai/api/v1/chat/completions';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.openrouterApiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        response_format: { type: 'json_object' }
-      }),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`OpenRouter API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.choices?.[0]?.message?.content || '';
-    promptTokens = data.usage?.prompt_tokens || 0;
-    completionTokens = data.usage?.completion_tokens || 0;
-  } else if (provider === 'groq') {
-    const url = 'https://api.groq.com/openai/v1/chat/completions';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.groqApiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        response_format: { type: 'json_object' }
-      }),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`Groq API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.choices?.[0]?.message?.content || '';
-    promptTokens = data.usage?.prompt_tokens || 0;
-    completionTokens = data.usage?.completion_tokens || 0;
-  } else if (provider === 'opencode') {
-    const url = (config.opencodeBaseUrl || 'https://opencode.ai/zen/go/v1').replace(/\/+$/, '') + '/chat/completions';
-    const bodyPayload = {
-      model,
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-      response_format: { type: 'json_object' }
-    };
-    if (config.agentVariant) bodyPayload.reasoning_effort = config.agentVariant;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.opencodeApiKey}` },
-      body: JSON.stringify(bodyPayload),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`OpenCode Go API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.choices?.[0]?.message?.content || '';
-    promptTokens = data.usage?.prompt_tokens || 0;
-    completionTokens = data.usage?.completion_tokens || 0;
-  } else {
-    const url = 'https://api.deepseek.com/chat/completions';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        response_format: { type: 'json_object' }
-      }),
-      signal: AbortSignal.timeout(120000)
-    });
-    if (!res.ok) throw new Error(`DeepSeek API returned status ${res.status}`);
-    const data = await res.json();
-    responseText = data.choices?.[0]?.message?.content || '';
-    promptTokens = data.usage?.prompt_tokens || 0;
-    completionTokens = data.usage?.completion_tokens || 0;
+    throw err;
   }
+  const promptTokens = usage?.prompt || 0;
+  const completionTokens = usage?.completion || 0;
 
   const rates = PRICING[provider]?.[model] || { input: 0, output: 0 };
   const cost = (promptTokens * rates.input) + (completionTokens * rates.output);

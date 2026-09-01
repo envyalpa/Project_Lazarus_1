@@ -10,9 +10,7 @@ class TranscriptionStore {
   allLogs = $state([]);
   
   // Settings connectivity and configs
-  hfConnected = $state(false);
   colabConnected = $state(false);
-  nvidiaConnected = $state(false);
   geminiConnected = $state(false);
   elevenlabsConnected = $state(false);
   config = $state({});
@@ -35,9 +33,7 @@ class TranscriptionStore {
       const res = await fetch('/settings/engine');
       if (!res.ok) return;
       const data = await res.json();
-      this.hfConnected = data.hfConnected || false;
       this.colabConnected = data.colabConnected || false;
-      this.nvidiaConnected = data.nvidiaConnected || false;
       this.geminiConnected = data.geminiConnected || false;
       this.elevenlabsConnected = data.elevenlabsConnected || false;
       this.config = data.config || {};
@@ -78,7 +74,7 @@ class TranscriptionStore {
     }
   }
 
-  async addToQueue(file, mode = 'huggingface') {
+  async addToQueue(file, mode = 'elevenlabs') {
     const id = Math.random().toString(36).substring(2, 15);
     const newItem = {
       id,

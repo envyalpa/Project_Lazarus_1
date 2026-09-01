@@ -5,26 +5,13 @@ const CONFIG_DIR = join(process.cwd(), 'data');
 const CONFIG_PATH = join(CONFIG_DIR, 'engine-config.json');
 
 export const defaults = {
-  // Hugging Face
-  hfApiKey: '',
-  hfModel: 'openai/whisper-large-v3-turbo',
-  hfLlmModel: 'meta-llama/Llama-3.3-70B-Instruct',
   // Google Colaboratory
   colabUrl: '',
   colabNgrokToken: '',
-  // Nvidia NIM
-  nvidiaApiKey: '',
-  nvidiaApiBaseUrl: 'https://integrate.api.nvidia.com/v1',
-  nvidiaAsrModel: 'nvidia/parakeet-tdt-0.6b-v3',
-  nvidiaLlmModel: 'meta/llama-3.3-70b-instruct',
   // Google Gemini API
   googleApiKey: '',
   googleBooksApiKey: '',
   geminiModel: 'models/gemini-2.0-flash',
-  // OpenRouter AI
-  openrouterApiKey: '',
-  // Groq AI
-  groqApiKey: '',
   // OpenCode Go
   opencodeApiKey: '',
   opencodeBaseUrl: 'https://opencode.ai/zen/go/v1',
@@ -40,10 +27,7 @@ Format timestamps as [HH:MM:SS] or [MM:SS] at the beginning of speaker turns (e.
   elevenlabsModel: 'scribe_v2',
   elevenlabsLanguageCode: '',
   // Connector Enable Flags
-  geminiEnabled: true,
   colabEnabled: true,
-  hfEnabled: true,
-  nvidiaEnabled: true,
   elevenlabsEnabled: true,
   // Agent Options
   agentTemperature: 0.4,

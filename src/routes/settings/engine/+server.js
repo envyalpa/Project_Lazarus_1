@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, saveConfig } from '$lib/server/engine-config.js';
+import { callAgent } from '$lib/server/llm.js';
 import db from '$lib/server/db.js';
 
 const TRANSCRIPTIONS_DIR = join(process.cwd(), 'data', 'transcriptions');
@@ -265,18 +266,6 @@ function formatElevenLabsWords(words) {
 export async function GET() {
   const config = readConfig();
 
-  // Hugging Face connectivity check
-  let hfConnected = false;
-  if (config.hfApiKey) {
-    try {
-      const hfRes = await fetch('https://huggingface.co/api/whoami-v2', {
-        headers: { 'Authorization': `Bearer ${config.hfApiKey}` },
-        signal: AbortSignal.timeout(3000)
-      });
-      hfConnected = hfRes.ok;
-    } catch { hfConnected = false; }
-  }
-
   // Google Colaboratory connectivity check
   let colabConnected = false;
   if (config.colabUrl) {
@@ -296,19 +285,6 @@ export async function GET() {
   // Sync internal state to failed if the live connection is lost
   if (!colabConnected && colabState === 'ready') {
     colabState = 'failed';
-  }
-
-  // Nvidia NIM connectivity check
-  let nvidiaConnected = false;
-  if (config.nvidiaApiKey) {
-    try {
-      const baseUrl = (config.nvidiaApiBaseUrl || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
-      const nvRes = await fetch(`${baseUrl}/models`, {
-        headers: { 'Authorization': `Bearer ${config.nvidiaApiKey}` },
-        signal: AbortSignal.timeout(5000)
-      });
-      nvidiaConnected = nvRes.ok;
-    } catch { nvidiaConnected = false; }
   }
 
   // Google Gemini connectivity check
@@ -355,11 +331,9 @@ export async function GET() {
   }
 
   return Response.json({
-    connected: colabConnected || hfConnected || nvidiaConnected || geminiConnected || elevenlabsConnected,
+    connected: colabConnected || geminiConnected || elevenlabsConnected,
     config,
-    hfConnected,
     colabConnected,
-    nvidiaConnected,
     geminiConnected,
     elevenlabsConnected,
     history
@@ -641,9 +615,7 @@ export async function POST({ request, url }) {
       try {
         const sessionState = JSON.parse(readFileSync(sessionJsonPath, 'utf8'));
         const config = readConfig();
-        const isHuggingFace = sessionState.transcribeMode === 'huggingface';
         const isColab = sessionState.transcribeMode === 'colab';
-        const isNvidia = sessionState.transcribeMode === 'nvidia';
         const isGemini = sessionState.transcribeMode === 'gemini';
         const isElevenLabs = sessionState.transcribeMode === 'elevenlabs';
         const CHUNK_SECONDS = 300; // 5-minute chunks for cloud providers
@@ -652,10 +624,10 @@ export async function POST({ request, url }) {
         const wavInfo = parseWavHeader(wavBuf);
         const { channels, sampleRate, bitsPerSample, dataSize, dataOffset } = wavInfo;
         const bytesPerSec = sampleRate * channels * (bitsPerSample / 8);
-        const chunkSize = (isGemini || isElevenLabs) ? dataSize : (bytesPerSec * CHUNK_SECONDS);
+        const chunkSize = (bytesPerSec * CHUNK_SECONDS);
 
-        const chunkStart = (isGemini || isElevenLabs) ? 0 : (chunkIndex * chunkSize);
-        const chunkEnd = (isGemini || isElevenLabs) ? dataSize : Math.min((chunkIndex + 1) * chunkSize, dataSize);
+        const chunkStart = (chunkIndex * chunkSize);
+        const chunkEnd = Math.min((chunkIndex + 1) * chunkSize, dataSize);
         const chunkDataSize = chunkEnd - chunkStart;
 
         if (chunkDataSize <= 0) return Response.json({ error: 'Invalid chunk range' }, { status: 400 });
@@ -664,78 +636,6 @@ export async function POST({ request, url }) {
           buildWavHeader(chunkDataSize, channels, sampleRate, bitsPerSample),
           wavBuf.slice(dataOffset + chunkStart, dataOffset + chunkEnd)
         ]);
-
-        // ─── Hugging Face ───────────────────────────────────────────────────────
-        if (isHuggingFace) {
-          if (!config.hfApiKey) return Response.json({ error: 'Missing Hugging Face Access Token. Please add it in settings.' }, { status: 400 });
-
-          const primaryModel = config.hfModel || 'openai/whisper-large-v3-turbo';
-          const transcriptionFallbacks = Array.from(new Set([primaryModel, 'openai/whisper-large-v3-turbo', 'openai/whisper-large-v3']));
-          let transcriptText = '', lastError = null;
-
-          for (const model of transcriptionFallbacks) {
-            try {
-              console.log(`[HF API] Trying ASR model: ${model}`);
-              const hfUrl = `https://router.huggingface.co/hf-inference/models/${model}`;
-              const transcriptionRes = await fetchWithRetry(hfUrl, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${config.hfApiKey}`, 'Content-Type': 'audio/wav', 'Content-Length': chunkWav.length.toString() },
-                body: new Uint8Array(chunkWav),
-                signal: request.signal
-              });
-              if (!transcriptionRes.ok) { const errText = await readErrorText(transcriptionRes); throw new Error(errText); }
-              const trData = await transcriptionRes.json();
-              transcriptText = trData.text || '';
-              lastError = null;
-              break;
-            } catch (err) {
-              console.warn(`[HF API] ASR model ${model} failed: ${err.message}`);
-              lastError = err;
-            }
-          }
-          if (lastError) throw new Error(`Hugging Face transcription failed: ${lastError.message}`);
-
-          // Round 2: LLM self-correction via HF
-          if (transcriptText.trim()) {
-            const verifyPrompt = `Review the following transcript for typos, spelling/grammatical errors, repetitions, and formatting inconsistencies. Maintain all timestamps and speaker attributions exactly as they are. Return only the cleaned transcript with no additional chat commentary or conversational padding.\n\nTranscript:\n${transcriptText}`;
-            const primaryVerifyModel = config.hfLlmModel || 'meta-llama/Llama-3.3-70B-Instruct';
-            const verifyFallbacks = Array.from(new Set([primaryVerifyModel, 'meta-llama/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-72B-Instruct']));
-            for (const verifyModel of verifyFallbacks) {
-              try {
-                console.log(`[HF API] Trying LLM verification: ${verifyModel}`);
-                const verifyRes = await fetchWithRetry('https://router.huggingface.co/v1/chat/completions', {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${config.hfApiKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ model: verifyModel, messages: [{ role: 'user', content: verifyPrompt }] }),
-                  signal: request.signal
-                });
-                if (verifyRes.ok) {
-                  const verifyData = await verifyRes.json();
-                  const verifiedText = verifyData.choices?.[0]?.message?.content;
-                  if (verifiedText?.trim()) transcriptText = verifiedText.trim();
-                  break;
-                } else {
-                  const errText = await readErrorText(verifyRes);
-                  throw new Error(errText);
-                }
-              } catch (err) {
-                console.warn(`[HF API] LLM verification ${verifyModel} failed: ${err.message}`);
-              }
-            }
-          }
-
-          const chunkResult = { index: chunkIndex, text: transcriptText, segments: [] };
-          const chunksDir = join(sessionDir, 'chunks');
-          if (!existsSync(chunksDir)) mkdirSync(chunksDir, { recursive: true });
-          writeFileSync(join(chunksDir, `chunk_${chunkIndex}.json`), JSON.stringify(chunkResult, null, 2));
-
-          sessionState.currentChunk = Math.max(sessionState.currentChunk, chunkIndex + 1);
-          sessionState.updatedAt = new Date().toISOString();
-          sessionState.status = sessionState.currentChunk >= sessionState.totalChunks ? 'complete' : 'transcribing';
-          writeFileSync(sessionJsonPath, JSON.stringify(sessionState, null, 2));
-
-          return Response.json({ success: true, chunk: chunkResult, session: sessionState });
-        }
 
         // ─── Google Colaboratory ────────────────────────────────────────────────
         if (isColab) {
@@ -792,110 +692,14 @@ export async function POST({ request, url }) {
           const colabData = await colabRes.json();
           let transcriptText = colabData.text || colabData.transcription || '';
 
-          // Optional Round 2: LLM self-correction via Hugging Face if hfApiKey available
-          if (transcriptText.trim() && config.hfApiKey) {
-            const verifyPrompt = `Review the following transcript for typos, spelling/grammatical errors, repetitions, and formatting inconsistencies. Maintain all timestamps and speaker attributions exactly as they are. Return only the cleaned transcript with no additional chat commentary or conversational padding.\n\nTranscript:\n${transcriptText}`;
-            const verifyModel = config.hfLlmModel || 'meta-llama/Llama-3.3-70B-Instruct';
-            try {
-              const verifyRes = await fetchWithRetry('https://router.huggingface.co/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${config.hfApiKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: verifyModel, messages: [{ role: 'user', content: verifyPrompt }] }),
-                signal: request.signal
-              });
-              if (verifyRes.ok) {
-                const verifyData = await verifyRes.json();
-                const verifiedText = verifyData.choices?.[0]?.message?.content;
-                if (verifiedText?.trim()) transcriptText = verifiedText.trim();
-              }
-            } catch (err) {
-              console.warn(`[Colab+HF] LLM verification failed (non-fatal): ${err.message}`);
-            }
-          }
-
-          const chunkResult = { index: chunkIndex, text: transcriptText, segments: [] };
-          const chunksDir = join(sessionDir, 'chunks');
-          if (!existsSync(chunksDir)) mkdirSync(chunksDir, { recursive: true });
-          writeFileSync(join(chunksDir, `chunk_${chunkIndex}.json`), JSON.stringify(chunkResult, null, 2));
-
-          sessionState.currentChunk = Math.max(sessionState.currentChunk, chunkIndex + 1);
-          sessionState.updatedAt = new Date().toISOString();
-          sessionState.status = sessionState.currentChunk >= sessionState.totalChunks ? 'complete' : 'transcribing';
-          writeFileSync(sessionJsonPath, JSON.stringify(sessionState, null, 2));
-
-          return Response.json({ success: true, chunk: chunkResult, session: sessionState });
-        }
-
-        // ─── Nvidia NIM ────────────────────────────────────────────────────────
-        if (isNvidia) {
-          if (!config.nvidiaApiKey) return Response.json({ error: 'Missing Nvidia API Key. Please add it in settings.' }, { status: 400 });
-
-          const baseUrl = (config.nvidiaApiBaseUrl || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
-          const llmModel = config.nvidiaLlmModel || 'meta/llama-3.3-70b-instruct';
-          let transcriptText = '';
-
-          // Round 1: ASR via Hugging Face Inference API (Nvidia doesn't host ASR endpoints)
-          if (!config.hfApiKey) {
-            throw new Error('Nvidia mode requires Hugging Face Access Token for ASR. Please add it in settings.');
-          }
-          try {
-            const primaryModel = config.hfModel || 'openai/whisper-large-v3-turbo';
-            const transcriptionFallbacks = Array.from(new Set([primaryModel, 'openai/whisper-large-v3-turbo', 'openai/whisper-large-v3']));
-            let lastError = null;
-            for (const model of transcriptionFallbacks) {
-              try {
-                console.log(`[Nvidia mode ASR via HF] Model: ${model}, chunk ${chunkIndex}`);
-                const hfUrl = `https://router.huggingface.co/hf-inference/models/${model}`;
-                const transcriptionRes = await fetchWithRetry(hfUrl, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${config.hfApiKey}`, 'Content-Type': 'audio/wav', 'Content-Length': chunkWav.length.toString() },
-                  body: new Uint8Array(chunkWav),
-                  signal: request.signal
-                });
-                if (!transcriptionRes.ok) { const errText = await readErrorText(transcriptionRes); throw new Error(errText); }
-                const trData = await transcriptionRes.json();
-                transcriptText = trData.text || '';
-                lastError = null;
-                break;
-              } catch (err) {
-                console.warn(`[Nvidia mode ASR via HF] Model ${model} failed: ${err.message}`);
-                lastError = err;
-              }
-            }
-            if (lastError) throw new Error(`Nvidia mode ASR failed: ${lastError.message}`);
-          } catch (err) {
-            throw new Error(`Nvidia transcription failed: ${err.message}`);
-          }
-
-          // Round 2: LLM self-correction via Nvidia /chat/completions
+          // Optional Round 2: LLM self-correction via the selected agent
           if (transcriptText.trim()) {
             const verifyPrompt = `Review the following transcript for typos, spelling/grammatical errors, repetitions, and formatting inconsistencies. Maintain all timestamps and speaker attributions exactly as they are. Return only the cleaned transcript with no additional chat commentary or conversational padding.\n\nTranscript:\n${transcriptText}`;
             try {
-              console.log(`[Nvidia LLM] Model: ${llmModel}, chunk ${chunkIndex}`);
-              const bodyPayload = {
-                model: llmModel,
-                messages: [{ role: 'user', content: verifyPrompt }]
-              };
-              if (llmModel === 'google/diffusiongemma-26b-a4b-it') {
-                bodyPayload.chat_template_kwargs = { enable_thinking: true };
-              }
-              const llmRes = await fetchWithRetry(`${baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${config.nvidiaApiKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyPayload),
-                signal: request.signal
-              });
-
-              if (llmRes.ok) {
-                const llmData = await llmRes.json();
-                const verifiedText = llmData.choices?.[0]?.message?.content;
-                if (verifiedText?.trim()) transcriptText = verifiedText.trim();
-              } else {
-                const errText = await readErrorText(llmRes);
-                console.warn(`[Nvidia LLM] Verification failed (non-fatal): ${errText}`);
-              }
+              const { text: verifiedText } = await callAgent({ user: verifyPrompt, timeout: 60000 });
+              if (verifiedText?.trim()) transcriptText = verifiedText.trim();
             } catch (err) {
-              console.warn(`[Nvidia LLM] Verification failed (non-fatal): ${err.message}`);
+              console.warn(`[Colab+Agent] LLM verification failed (non-fatal): ${err.message}`);
             }
           }
 
@@ -1140,7 +944,7 @@ export async function POST({ request, url }) {
   // ── Handle Audio Upload (multipart/form-data) ────────────────────────────────
   const formData = await request.formData();
   const file = formData.get('audio');
-  const transcribeMode = formData.get('mode') || 'huggingface';
+  const transcribeMode = formData.get('mode') || 'elevenlabs';
 
   if (!file || !(file instanceof File)) {
     return new Response(JSON.stringify({ error: 'No audio file provided' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -1164,14 +968,6 @@ export async function POST({ request, url }) {
   }
   if (transcribeMode === 'gemini' && !config.googleApiKey) {
     return new Response(JSON.stringify({ error: 'Missing Google Gemini API Key. Please add it in settings.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-  }
-  if (transcribeMode === 'nvidia') {
-    if (!config.nvidiaApiKey) {
-      return new Response(JSON.stringify({ error: 'Missing Nvidia API Key. Please add it in settings.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-    }
-    if (!config.hfApiKey) {
-      return new Response(JSON.stringify({ error: 'Nvidia mode requires Hugging Face Access Token for ASR. Please add it in settings.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-    }
   }
   if (transcribeMode === 'elevenlabs' && !config.elevenlabsApiKey) {
     return new Response(JSON.stringify({ error: 'Missing ElevenLabs API Key. Please add it in settings.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -1200,7 +996,7 @@ export async function POST({ request, url }) {
     const { channels, sampleRate, bitsPerSample, dataSize } = wavInfo;
     const bytesPerSec = sampleRate * channels * (bitsPerSample / 8);
     const duration = bytesPerSec > 0 ? dataSize / bytesPerSec : 0;
-    const totalChunks = (transcribeMode === 'gemini' || transcribeMode === 'elevenlabs') ? 1 : Math.max(1, Math.ceil(dataSize / (bytesPerSec * CHUNK_SECONDS)));
+    const totalChunks = Math.max(1, Math.ceil(dataSize / (bytesPerSec * CHUNK_SECONDS)));
 
     const sessionState = {
       id: sessionId,
