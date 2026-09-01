@@ -415,7 +415,7 @@
   .row-2 .field-cat { flex: 1; }
   .row-2 .field-pb { flex: 1; }
   .row-2 .field-pt { flex: 1; }
-  .row-2 .field-pf { flex: 0 0 280px; }
+  .row-2 .field-pf { flex: 0 0 322px; }
 
   .row-3 .field-notes { width: 100%; }
 

@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "set NODE_OPTIONS=--unhandled-rejections=warn && vite dev",
+		"dev": "set NODE_OPTIONS=--unhandled-rejections=warn && vite dev --port 5174 --strictPort",
 		"build": "node scripts/check-typography.js && vite build",
 		"check": "svelte-check && node scripts/check-typography.js",
 		"preview": "vite preview",

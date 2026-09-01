@@ -43,7 +43,7 @@
   $effect(() => { loadEdiConfig(); });
 
   const isKeyConfigured = $derived(
-    ediConfig ? ((ediConfig.agentProvider || 'gemini') === 'gemini' ? !!ediConfig.googleApiKey : !!ediConfig.deepseekApiKey) : true
+    ediConfig ? ((ediConfig.agentProvider || 'gemini') === 'gemini' ? !!ediConfig.googleApiKey : !!ediConfig.opencodeApiKey) : true
   );
 
   function handleSubmit(e) {
@@ -551,6 +551,14 @@
   .btn-deep-review:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .scrollable-body {

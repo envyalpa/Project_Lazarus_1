@@ -1,6 +1,26 @@
 ﻿<script>
   import { X } from '@lucide/svelte';
-  let { open = false, title = '', wide = false, wider = false, full = false, narrow = false, compact = false, noHeader = false, noBodyScroll = false, onclose, children } = $props();
+  let { open = false, title = '', label = '', wide = false, wider = false, full = false, narrow = false, compact = false, noHeader = false, noBodyScroll = false, onclose, children } = $props();
+
+  let dialogRef = $state(null);
+  let lastFocused = null;
+
+  function focusables() {
+    if (!dialogRef) return [];
+    return [...dialogRef.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+  }
+
+  $effect(() => {
+    if (open) {
+      lastFocused = document.activeElement;
+      const first = focusables()[0];
+      (first || dialogRef)?.focus?.();
+    } else if (lastFocused) {
+      lastFocused.focus?.();
+      lastFocused = null;
+    }
+  });
 
   function handleBackdrop(e) {
     if (e.target === e.currentTarget) onclose?.();
@@ -8,6 +28,13 @@
 
   function handleKeydown(e) {
     if (e.key === 'Escape') onclose?.();
+    if (e.key === 'Tab') {
+      const f = focusables();
+      if (f.length < 2) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   }
 </script>
 
@@ -15,7 +42,7 @@
 
 {#if open}
   <div data-section="modal-backdrop" class="backdrop" role="presentation" onclick={handleBackdrop} onkeydown={handleKeydown}>
-    <div data-section="modal" class="modal" class:wide class:wider class:full class:narrow class:compact role="dialog" aria-modal="true">
+    <div data-section="modal" bind:this={dialogRef} tabindex="-1" class="modal" class:wide class:wider class:full class:narrow class:compact role="dialog" aria-modal="true" aria-label={label || undefined}>
       {#if !noHeader}
         <div data-label="modal-header" class="modal-header">
           <h3 data-label="modal-title" class="modal-header-title">{title}</h3>

@@ -198,6 +198,7 @@ h1, h2, h3, h4, h5, h6 {
 .processing-spinner { width: 48px; height: 48px; border: 3px solid rgba(0, 212, 255, 0.1); border-top-color: var(--cyan); border-radius: 50%; animation: spin 1s linear infinite; box-shadow: 0 0 15px var(--cyan-glow); }
 .processing-text { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 600; color: var(--cyan); text-transform: uppercase; letter-spacing: 1.5px; animation: pulse-text 1.5s ease-in-out infinite; }
 @keyframes pulse-text { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* Processed tab indicators */
 .processed-status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 6px 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid var(--success); border-radius: var(--radius); }

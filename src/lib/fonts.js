@@ -20,6 +20,7 @@ const HEADING_FONTS = [
   { id: 'sofia-sans-condensed', name: 'Sofia Sans Condensed', family: 'Sofia Sans', variant: 'Condensed', source: 'google', cssFamily: "'Sofia Sans Condensed', sans-serif", weights: 'wght@100..900' },
   { id: 'sofia-sans-semi-condensed', name: 'Sofia Sans Semi Condensed', family: 'Sofia Sans', variant: 'Semi Condensed', source: 'google', cssFamily: "'Sofia Sans Semi Condensed', sans-serif", weights: 'wght@300..900' },
   { id: 'conduit-itc', name: 'ITC Conduit', family: 'ITC Conduit', variant: null, source: 'local', cssFamily: "'Conduit ITC', sans-serif" },
+  { id: 'urbanist', name: 'Urbanist', family: 'Urbanist', variant: null, source: 'google', cssFamily: "'Urbanist', sans-serif", weights: 'wght@100..900' },
 ];
 
 const BODY_FONTS = [
@@ -32,6 +33,7 @@ const BODY_FONTS = [
   { id: 'barlow-semi-condensed', name: 'Barlow Semi Condensed', family: 'Barlow', variant: 'Semi Condensed', source: 'google', cssFamily: "'Barlow Semi Condensed', sans-serif", weights: 'wght@100;200;300;400;500;600;700;800;900' },
   { id: 'prompt', name: 'Prompt', family: 'Prompt', variant: null, source: 'google', cssFamily: "'Prompt', sans-serif", weights: 'wght@100;200;300;400;500;600;700;800;900' },
   { id: 'conduit-itc', name: 'ITC Conduit', family: 'ITC Conduit', variant: null, source: 'local', cssFamily: "'Conduit ITC', sans-serif" },
+  { id: 'urbanist', name: 'Urbanist', family: 'Urbanist', variant: null, source: 'google', cssFamily: "'Urbanist', sans-serif", weights: 'wght@100..900' },
 ];
 
 const MONO_FONTS = [
