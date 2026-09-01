@@ -1,6 +1,7 @@
 import db from './db.js';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { DATA_DIR } from './paths.js';
 
 export function getRuns() {
   const query = `
@@ -60,7 +61,7 @@ export function createRun({ client_id, project_id, platform_name, run_name, url 
     if (customCriteria && Array.isArray(customCriteria)) {
       criteriaList = customCriteria;
     } else {
-      const templatePath = join(process.cwd(), 'data', 'bizverse_testing_criteria.json');
+      const templatePath = join(DATA_DIR, 'bizverse_testing_criteria.json');
       if (existsSync(templatePath)) {
         try {
           const raw = readFileSync(templatePath, 'utf-8');

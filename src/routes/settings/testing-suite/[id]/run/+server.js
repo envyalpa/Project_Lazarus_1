@@ -5,6 +5,7 @@ import { join } from 'path';
 import { loadConfig } from '$lib/server/engine-config.js';
 import { activeProcesses } from '$lib/server/active-processes.js';
 import db from '$lib/server/db.js';
+import { AGENT_LOGS_DIR } from '$lib/server/paths.js';
 
 export async function POST({ params, request }) {
   try {
@@ -46,7 +47,7 @@ export async function POST({ params, request }) {
     }
 
     if (activeProcesses.has(runId)) {
-      const logFile = join(process.cwd(), 'data', 'agent_logs', `${runId}.log`);
+      const logFile = join(AGENT_LOGS_DIR, `${runId}.log`);
       if (criteriaIds && criteriaIds.length > 0) {
         try {
           writeFileSync(logFile, `[SYS] Queued test cases: ${criteriaIds.join(', ')}\n`, { flag: 'a' });
@@ -56,7 +57,7 @@ export async function POST({ params, request }) {
     }
 
     // Prepare log folder
-    const logsDir = join(process.cwd(), 'data', 'agent_logs');
+    const logsDir = AGENT_LOGS_DIR;
     if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
     const logFile = join(logsDir, `${runId}.log`);
     writeFileSync(logFile, `[INIT] Starting browser automation worker...\n`, 'utf-8');
@@ -101,7 +102,7 @@ export async function DELETE({ params }) {
     const runId = Number(params.id);
     const child = activeProcesses.get(runId);
     if (child) {
-      const logFile = join(process.cwd(), 'data', 'agent_logs', `${runId}.log`);
+      const logFile = join(AGENT_LOGS_DIR, `${runId}.log`);
       try { writeFileSync(logFile, `\n[SYS] Execution stopped by user.\n`, { flag: 'a' }); } catch {}
       if (process.platform === 'win32') {
         spawn('taskkill', ['/pid', child.pid, '/f', '/t']);

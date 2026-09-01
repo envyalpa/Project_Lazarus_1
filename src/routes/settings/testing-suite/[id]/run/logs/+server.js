@@ -1,9 +1,10 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { AGENT_LOGS_DIR } from '$lib/server/paths.js';
 
 export function GET({ params, request, url }) {
   const runId = params.id;
-  const logFile = join(process.cwd(), 'data', 'agent_logs', `${runId}.log`);
+  const logFile = join(AGENT_LOGS_DIR, `${runId}.log`);
 
   const raw = url.searchParams.get('raw') === 'true';
   if (raw) {

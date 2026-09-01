@@ -1,10 +1,10 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
 import Database from 'better-sqlite3';
+import { DB_PATH, ENGINE_CONFIG_PATH } from '../src/lib/server/paths.js';
 
 // Standard model caller
 export async function callLlm(systemPrompt, userPrompt, imageBuffer = null) {
-  const configPath = join(process.cwd(), 'data', 'engine-config.json');
+  const configPath = ENGINE_CONFIG_PATH;
   const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
   const provider = config.agentProvider || 'gemini';
@@ -79,7 +79,7 @@ export async function callLlm(systemPrompt, userPrompt, imageBuffer = null) {
 
 function logToDb(systemPrompt, userPrompt, response, provider, model) {
   try {
-    const db = new Database(join(process.cwd(), 'data', 'lazarus.db'));
+    const db = new Database(DB_PATH);
     db.prepare(`
       INSERT INTO ai_debug_log (action, system_prompt, user_prompt, raw_response, final_response, provider, model, request_data)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)

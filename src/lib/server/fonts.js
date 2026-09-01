@@ -1,8 +1,8 @@
-import { join } from 'path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { DATA_DIR, FONT_CONFIG_PATH } from './paths.js';
 
-const CONFIG_DIR = join(process.cwd(), 'data');
-const CONFIG_PATH = join(CONFIG_DIR, 'font-config.json');
+const CONFIG_DIR = DATA_DIR;
+const CONFIG_PATH = FONT_CONFIG_PATH;
 
 const DEFAULTS = {
   headingFont: 'orbitron',

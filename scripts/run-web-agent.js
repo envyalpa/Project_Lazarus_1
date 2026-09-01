@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { callLlm, getInteractiveElements } from './agent-utils.js';
+import { DB_PATH, AGENT_LOGS_DIR } from '../src/lib/server/paths.js';
 
 const args = {};
 process.argv.slice(2).forEach(val => {
@@ -19,8 +20,8 @@ if (!runId || !loginUrl) {
   process.exit(1);
 }
 
-const db = new Database(join(process.cwd(), 'data', 'lazarus.db'));
-const logsDir = join(process.cwd(), 'data', 'agent_logs');
+const db = new Database(DB_PATH);
+const logsDir = AGENT_LOGS_DIR;
 if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
 const logFile = join(logsDir, `${runId}.log`);
 

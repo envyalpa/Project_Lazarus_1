@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { DATA_DIR, ENGINE_CONFIG_PATH } from './paths.js';
 
-const CONFIG_DIR = join(process.cwd(), 'data');
-const CONFIG_PATH = join(CONFIG_DIR, 'engine-config.json');
+const CONFIG_DIR = DATA_DIR;
+const CONFIG_PATH = ENGINE_CONFIG_PATH;
 
 export const defaults = {
   // Google Colaboratory

@@ -1,8 +1,8 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { ENGINE_CONFIG_PATH } from './paths.js';
 
 export async function callLlmServer(systemPrompt, userPrompt) {
-  const configPath = join(process.cwd(), 'data', 'engine-config.json');
+  const configPath = ENGINE_CONFIG_PATH;
   let config = {};
   try {
     config = JSON.parse(readFileSync(configPath, 'utf-8'));

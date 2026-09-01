@@ -4,6 +4,7 @@ import { parseFile } from '$lib/server/file-parser.js';
 import { saveFileChunksMemory } from '$lib/server/memory.js';
 import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import path from 'path';
+import { UPLOADS_DIR } from '$lib/server/paths.js';
 
 export async function GET({ params }) {
   return json(getByClient(Number(params.id)));
@@ -30,7 +31,7 @@ export async function POST({ params, request }) {
       const markdownContent = await parseFile(buffer, file.name);
       
       // Ensure target uploads directory exists
-      const clientDir = path.join(process.cwd(), 'data', 'uploads', `client_${params.id}`);
+      const clientDir = path.join(UPLOADS_DIR, `client_${params.id}`);
       if (!existsSync(clientDir)) {
         mkdirSync(clientDir, { recursive: true });
       }

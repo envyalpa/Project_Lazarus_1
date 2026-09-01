@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { DATA_DIR } from './paths.js';
 
-const dataDir = path.join(process.cwd(), 'data');
+const dataDir = DATA_DIR;
 let _db = null;
 
 function initDb() {

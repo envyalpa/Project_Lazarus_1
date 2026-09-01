@@ -6,8 +6,7 @@ import { join } from 'node:path';
 import { loadConfig, saveConfig } from '$lib/server/engine-config.js';
 import { callAgent } from '$lib/server/llm.js';
 import db from '$lib/server/db.js';
-
-const TRANSCRIPTIONS_DIR = join(process.cwd(), 'data', 'transcriptions');
+import { TRANSCRIPTIONS_DIR } from '$lib/server/paths.js';
 
 let activeColabProcess = null;
 let colabLogLines = [];
