@@ -1,7 +1,7 @@
 ﻿<script>
-  import { Plus, Minus, Pencil, Trash2, CheckCircle } from '@lucide/svelte';
+  import { Plus, Minus, Pencil, Trash2, CheckCircle, Check } from '@lucide/svelte';
 
-  let { season, onedit, ondelete, onincrement, ondecrement } = $props();
+  let { season, onedit, ondelete, onincrement, ondecrement, onmarkall, locked = false } = $props();
 
   let progress = $derived(
     season.total_episodes > 0 ? (season.episodes_watched / season.total_episodes) * 100 : 0
@@ -10,7 +10,7 @@
   let isComplete = $derived(season.total_episodes > 0 && season.episodes_watched >= season.total_episodes);
 </script>
 
-<div data-section="season-row" class="season-row">
+<div data-section="season-row" class="season-row" class:locked>
   <div class="season-header">
     <span class="season-label">
       Season {season.season_number}
@@ -19,21 +19,25 @@
       {/if}
     </span>
     <div class="season-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
+      <button type="button" class="act-btn watch-all" onclick={() => onmarkall?.(season.id)}
+        disabled={isComplete || locked} title="Mark all watched" aria-label="Mark all watched">
+        <Check size={15} />
+      </button>
       <div class="spinner">
         <button type="button" class="spinner-btn minus" onclick={() => ondecrement?.(season.id)}
-          disabled={season.episodes_watched <= 0} title="Decrement">
+          disabled={locked || season.episodes_watched <= 0} title="Decrement" aria-label="Decrement episodes watched">
           <Minus size={14} />
         </button>
         <span class="spinner-value">{season.episodes_watched}</span>
         <button type="button" class="spinner-btn plus" onclick={() => onincrement?.(season.id)}
-          disabled={season.episodes_watched >= season.total_episodes} title="Increment">
+          disabled={locked || season.episodes_watched >= season.total_episodes} title="Increment" aria-label="Increment episodes watched">
           <Plus size={14} />
         </button>
       </div>
-      <button type="button" class="act-btn edit" onclick={() => onedit?.(season)} title="Edit">
+      <button type="button" class="act-btn edit" onclick={() => onedit?.(season)} title="Edit" aria-label="Edit season">
         <Pencil size={15} />
       </button>
-      <button type="button" class="act-btn del" onclick={() => ondelete?.(season)} title="Delete">
+      <button type="button" class="act-btn del" onclick={() => ondelete?.(season)} title="Delete" aria-label="Delete season">
         <Trash2 size={15} />
       </button>
     </div>
@@ -58,6 +62,9 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
+
+  .season-row.locked .spinner { opacity: 0.4; }
+  .season-row.locked .spinner-btn { cursor: not-allowed; }
 
   .season-header {
     display: flex;
@@ -102,6 +109,9 @@
   .act-btn.edit:active { transform: scale(0.9); }
   .act-btn.del:hover { color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.08); }
   .act-btn.del:active { transform: scale(0.9); }
+  .act-btn.watch-all { color: var(--success); border-color: var(--success); }
+  .act-btn.watch-all:hover:not(:disabled) { background: rgba(34, 197, 94, 0.12); }
+  .act-btn.watch-all:disabled { opacity: 0.3; cursor: not-allowed; }
 
   .season-progress {
     display: flex;

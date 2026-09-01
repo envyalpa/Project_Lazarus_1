@@ -91,7 +91,7 @@
 <style>
   .quick-nav { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; overflow: hidden; }
   .action-bar { display: flex; gap: 4px; width: 100%; }
-  .act-btn { display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1; height: 30px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; font-family: var(--font-caption); font-size: var(--fs-caption); padding: 0 4px; transition: all 0.15s; }
+  .act-btn { display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1; height: 35px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; font-family: var(--font-caption); font-size: var(--fs-caption); padding: 0 4px; transition: all 0.15s; }
   .act-btn:hover { color: var(--cyan); border-color: var(--cyan); }
   .act-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .act-btn.del { color: var(--danger); }

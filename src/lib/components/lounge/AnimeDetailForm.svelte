@@ -146,6 +146,9 @@
         lastDirty = false;
         ondirty?.(false);
         notify("Commander, anime updated: " + updated.title);
+      } else if (res.status === 409) {
+        const err = await res.json();
+        notify(err.error);
       } else {
         notify("Error: Failed to save changes.");
       }
@@ -172,6 +175,9 @@
         const created = await res.json();
         onsaved?.(created);
         notify("Commander, anime created: " + created.title);
+      } else if (res.status === 409) {
+        const err = await res.json();
+        notify(err.error);
       } else {
         notify("Error: Failed to create anime.");
       }
@@ -252,7 +258,7 @@
 <style>
   .edit-form-grid {
     display: grid;
-    grid-template-columns: 1.75fr 3.25fr;
+    grid-template-columns: 1.75fr 2.44fr;
     grid-template-rows: 1fr auto;
     gap: 10px;
     min-height: 0;
@@ -336,15 +342,15 @@
     min-height: 0;
     resize: vertical;
   }
-  .edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
-  .efield-btn {
-    padding: 8px 20px; border-radius: var(--radius);
-    font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600;
-    cursor: pointer; border: 1px solid transparent; transition: all 0.2s;
+  @media (max-width: 900px) {
+    .edit-form-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+    }
+    .gc-col1, .gc-title-synopsis, .gc-fields {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+    .gc-col1 .edit-cover-wrap { max-height: 420px; }
   }
-  .efield-btn.ghost { background: none; border-color: var(--border); color: var(--text-dim); }
-  .efield-btn.ghost:hover { border-color: var(--text-dim); color: var(--text); }
-  .efield-btn.primary { background: var(--cyan); color: #000; border-color: var(--cyan); }
-  .efield-btn.primary:hover { background: linear-gradient(135deg, var(--cyan), #007bff); }
-  .efield-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

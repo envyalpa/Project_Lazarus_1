@@ -4,28 +4,12 @@ import db from '$lib/server/db.js';
 // Hardcoded default pricing rates per 1M tokens
 // google/gemini-2.5-flash: Input $0.075, Output $0.30
 // google/gemini-1.5-pro: Input $1.25, Output $5.00
-// deepseek-chat: Input $0.14, Output $0.28
-// deepseek-reasoner: Input $0.55, Output $2.19
 const LOCAL_PRICING = {
   google: {
     'gemini-3.5-flash': { input: 1.50 / 1000000, output: 9.00 / 1000000 },
     'gemini-2.5-flash': { input: 0.075 / 1000000, output: 0.30 / 1000000 },
     'gemini-1.5-flash': { input: 0.075 / 1000000, output: 0.30 / 1000000 },
     'gemini-1.5-pro': { input: 1.25 / 1000000, output: 5.00 / 1000000 }
-  },
-  deepseek: {
-    'deepseek-v4-flash': { input: 0.14 / 1000000, output: 0.28 / 1000000 },
-    'deepseek-v4-pro': { input: 0.435 / 1000000, output: 0.87 / 1000000 },
-    'deepseek-chat': { input: 0.14 / 1000000, output: 0.28 / 1000000 },
-    'deepseek-reasoner': { input: 0.55 / 1000000, output: 2.19 / 1000000 }
-  },
-  nvidia: {
-    'google/diffusiongemma-26b-a4b-it': { input: 0.70 / 1000000, output: 0.70 / 1000000 },
-    'nvidia/nemotron-3-ultra-550b-a55b': { input: 0.0, output: 0.0 },
-    'deepseek-ai/deepseek-v4-pro': { input: 0.435 / 1000000, output: 0.87 / 1000000 },
-    'deepseek-ai/deepseek-v4-flash': { input: 0.14 / 1000000, output: 0.28 / 1000000 },
-    'meta/llama-3.3-70b-instruct': { input: 0.90 / 1000000, output: 0.90 / 1000000 },
-    'mistralai/mistral-nemotron': { input: 0.18 / 1000000, output: 0.18 / 1000000 }
   },
   opencode: {
     'deepseek-v4-flash': { input: 0.14 / 1000000, output: 0.28 / 1000000 },
@@ -43,6 +27,47 @@ const LOCAL_PRICING = {
     'qwen3.6-plus': { input: 0.50 / 1000000, output: 3.00 / 1000000 }
   }
 };
+
+const OPENCODE_GO_ENDPOINT = 'https://opencode.ai/zen/go/v1/models';
+const OPENCODE_FREE_ENDPOINT = 'https://opencode.ai/zen/v1/models';
+
+function humanizeModelId(id) {
+  return id
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+async function fetchModelList(endpoint) {
+  try {
+    const res = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data.data || data.models || []);
+    return items
+      .map(item => typeof item === 'string' ? item : (item.id || item.name))
+      .filter(id => typeof id === 'string' && id.trim())
+      .filter((id, idx, arr) => arr.indexOf(id) === idx);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchOpencodeModels() {
+  const [go, all] = await Promise.all([
+    fetchModelList(OPENCODE_GO_ENDPOINT),
+    fetchModelList(OPENCODE_FREE_ENDPOINT)
+  ]);
+
+  const isFree = (id) => id === 'big-pickle' || id.endsWith('-free');
+  const free = all.filter(isFree);
+  const goModels = go.filter(id => !isFree(id));
+
+  return {
+    free: free.map(id => ({ value: id, label: humanizeModelId(id) })),
+    go: goModels.map(id => ({ value: id, label: humanizeModelId(id) }))
+  };
+}
 
 export async function GET() {
   const config = loadConfig();
@@ -72,12 +97,6 @@ export async function GET() {
     config: {
       googleApiKey: config.googleApiKey || '',
       googleBooksApiKey: config.googleBooksApiKey || '',
-      deepseekApiKey: config.deepseekApiKey || '',
-      hfApiKey: config.hfApiKey || '',
-      nvidiaApiKey: config.nvidiaApiKey || '',
-      nvidiaApiBaseUrl: config.nvidiaApiBaseUrl || '',
-      openrouterApiKey: config.openrouterApiKey || '',
-      groqApiKey: config.groqApiKey || '',
       opencodeApiKey: config.opencodeApiKey || '',
       opencodeBaseUrl: config.opencodeBaseUrl || defaults.opencodeBaseUrl,
       opencodeModel: config.opencodeModel || defaults.opencodeModel,
@@ -111,6 +130,14 @@ export async function POST({ request }) {
     };
     saveConfig(updated);
     return Response.json({ success: true, message: 'EDI AI settings saved successfully.' });
+  }
+
+  if (body.action === 'fetch-opencode-models') {
+    const models = await fetchOpencodeModels();
+    if (models) {
+      return Response.json({ success: true, models });
+    }
+    return Response.json({ success: false, error: 'Failed to fetch model list from OpenCode.' });
   }
 
   if (body.action === 'update-pricing') {

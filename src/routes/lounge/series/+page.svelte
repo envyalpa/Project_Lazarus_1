@@ -5,7 +5,8 @@
   import BookSeriesPanel from '$lib/components/lounge/BookSeriesPanel.svelte';
   import SeriesEditModal from '$lib/components/lounge/SeriesEditModal.svelte';
   import QuickNavPanel from '$lib/components/lounge/QuickNavPanel.svelte';
-  import BooksCollectionTitle from '$lib/components/lounge/BooksCollectionTitle.svelte';
+  import { BookOpen, Users, BookMarked, Tags } from '@lucide/svelte';
+
   import Modal from '$lib/components/operations/Modal.svelte';
   import DeleteConfirm from '$lib/components/operations/DeleteConfirm.svelte';
 
@@ -120,9 +121,16 @@
 </script>
 
 <div data-section="series-page" class="series-page">
+  <div class="page-toolbar">
+    <div class="toolbar-tabs">
+      <a href="/lounge/books" class="tab-btn"><BookOpen size={16} /><span>Book Library</span></a>
+      <a href="/lounge/authors" class="tab-btn"><Users size={16} /><span>Authors</span></a>
+      <a href="/lounge/series" class="tab-btn active"><BookMarked size={16} /><span>Series</span></a>
+      <a href="/lounge/genres" class="tab-btn"><Tags size={16} /><span>Genres</span></a>
+    </div>
+  </div>
   <div class="split-layout">
     <div class="nav-col">
-      <BooksCollectionTitle value="series" />
       <QuickNavPanel items={sortedSeriesNavItems} onselect={(item) => scrollToSection('series', item.name)} ondeletenav={(item) => { const s = allSeries.find(x => x.id === item.id); if (s) { const c = seriesNavItems.find(i => i.id === s.id)?.count || 0; deleteItem = { ...s, bookCount: c, isBulk: false }; } }} label="Series" onadd={() => editingSeries = { name: '' }} onsort={cycleNavSort} sortMode={navSortMode} onbulkdelete={handleBulkDelete} densityValue={seriesDensity} ondensity={cycleSeriesDensity} />
     </div>
       <div class="split-main">
@@ -151,6 +159,11 @@
 
 <style>
   .series-page { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .page-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .toolbar-tabs { display: flex; gap: 5px; background: var(--bg-bar); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; }
+  .tab-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 150px; height: 35px; padding: 0; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 500; color: var(--text-dim); text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px; border-radius: calc(var(--radius) - 1px); transition: all 0.2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-btn:hover { color: var(--amber); background: var(--bg-elevated); }
+  .tab-btn.active { color: var(--amber); background: rgba(255, 140, 0, 0.1); }
   .split-layout { display: flex; gap: 14px; flex: 1; min-height: 0; }
   .nav-col { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
   .nav-col :global(.quick-nav) { flex: 1; min-height: 0; }

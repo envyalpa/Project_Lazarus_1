@@ -35,6 +35,13 @@
           <Trash2 size={14} />
         </button>
       </div>
+      {#if visibleProps.rating && rating}
+        <div class="rating-bar" style="color: {rating.color};">
+          {#if rating.icon === 'star'}{#each Array(rating.count) as _}<Star size={14} />{/each}
+          {:else if rating.icon === 'trash'}<Trash2 size={14} />
+          {:else if rating.icon === 'flame'}<Flame size={14} fill="currentColor" />{/if}
+        </div>
+      {/if}
     </div>
   {/if}
   <div class="card-body">
@@ -52,19 +59,6 @@
             <Check size={14} />
           {/if}
           {statusLabel(anime.status)}
-        </span>
-      {/if}
-      {#if visibleProps.rating && rating}
-        <span class="rating-display" style="color: {rating.color}">
-          {#if rating.icon === 'star'}
-            {#each Array(rating.count) as _}
-              <Star size={14} />
-            {/each}
-          {:else if rating.icon === 'trash'}
-            <Trash2 size={14} />
-          {:else if rating.icon === 'flame'}
-            <Flame size={14} />
-          {/if}
         </span>
       {/if}
     </div>
@@ -143,6 +137,8 @@
     z-index: 2;
   }
 
+  .rating-bar { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px 8px; background: rgba(0, 0, 0, 0.8); z-index: 3; }
+
   .card-body {
     padding: 12px;
     display: flex;
@@ -151,8 +147,8 @@
   }
 
   .card-title {
-    font-family: var(--font-heading-1);
-    font-size: var(--fs-body);
+    font-family: var(--font-heading-2);
+    font-size: var(--fs-heading-2);
     font-weight: 600;
     color: var(--text);
     margin: 0;
@@ -196,8 +192,6 @@
     min-height: 24px;
   }
 
-  .rating-display { margin-left: auto; }
-
   .status-pill {
     display: inline-flex;
     align-items: center;
@@ -209,12 +203,6 @@
     font-size: var(--fs-body);
     font-weight: 600;
     background: rgba(0,0,0,0.2);
-  }
-
-  .rating-display {
-    display: inline-flex;
-    align-items: center;
-    gap: 1px;
   }
 
   .card-genres {
@@ -279,14 +267,14 @@
   }
 
   .density-compact .card-body { padding: 8px; gap: 4px; }
-  .density-compact .card-title { font-size: var(--fs-body); height: 46px; }
+  .density-compact .card-title { font-size: var(--fs-heading-2); height: 46px; }
   .density-compact .status-pill { font-size: var(--fs-body); }
   .density-compact .genre-tag { font-size: var(--fs-body); }
   .density-compact .progress-text { font-size: var(--fs-body); }
   .density-compact .card-meta { gap: 4px; min-height: 20px; }
 
   .density-large .card-body { padding: 16px; gap: 10px; }
-  .density-large .card-title { font-size: var(--fs-body); height: 69px; }
+  .density-large .card-title { font-size: var(--fs-heading-2); height: 69px; }
   .density-large .status-pill { font-size: var(--fs-body); }
   .density-large .genre-tag { font-size: var(--fs-body); }
   .density-large .progress-text { font-size: var(--fs-body); }

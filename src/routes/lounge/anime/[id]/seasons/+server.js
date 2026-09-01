@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { getByAnime, create, update, remove, incrementWatched, decrementWatched } from '$lib/server/anime-seasons.js';
+import { getByAnime, create, update, remove, incrementWatched, decrementWatched, markAllWatched } from '$lib/server/anime-seasons.js';
 
 export async function GET({ params }) {
   return json(getByAnime(params.id));
@@ -23,6 +23,9 @@ export async function POST({ params, request }) {
   }
   if (action === 'decrement') {
     return json(decrementWatched(data.id));
+  }
+  if (action === 'mark-all') {
+    return json(markAllWatched(data.id));
   }
 
   return json({ error: 'Unknown action' }, { status: 400 });

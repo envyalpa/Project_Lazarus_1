@@ -64,7 +64,7 @@
   let hasProperties = $derived(hasSeries || hasGenres || hasDates || hasRating);
 </script>
 
-<div data-section="book-card" class="card density-{density}" class:unprocessed={!book.processed} role="link" onclick={() => onselect?.(book)} onkeydown={(e) => { if (e.key === 'Enter') onselect?.(book); }} tabindex="0">
+<div data-section="book-card" class="card density-{density}" role="link" onclick={() => onselect?.(book)} onkeydown={(e) => { if (e.key === 'Enter') onselect?.(book); }} tabindex="0">
   {#if book.cover_url}
     <div data-label="card-cover" class="card-cover">
       <div class="card-cover-inner">
@@ -86,6 +86,14 @@
             <button type="button" class="action-btn edit" onclick={(e) => { e.stopPropagation(); onedit?.(book); }} title="Edit"><Pencil size={14} /></button>
             <button type="button" class="action-btn delete" onclick={(e) => { e.stopPropagation(); ondelete?.(book); }} title="Delete"><Trash2 size={14} /></button>
           </div>
+
+          {#if hasRating}
+            <div class="rating-bar" style="color: {rating.color};">
+              {#if rating.icon === 'star'}{#each Array(rating.count) as _}<Star size={14} fill="currentColor" />{/each}
+              {:else if rating.icon === 'trash'}<Trash2 size={14} />
+              {:else if rating.icon === 'flame'}<Flame size={14} fill="currentColor" />{/if}
+            </div>
+          {/if}
         </div>
         <!-- Back side of the card cover (shows description) -->
         <div class="cover-back">
@@ -165,15 +173,6 @@
             {/if}
           </div>
         {/if}
-        {#if hasRating}
-          <div class="card-rating">
-            <span class="rating-display" style="color: {rating.color};">
-              {#if rating.icon === 'star'}{#each Array(rating.count) as _}<Star size={14} fill="currentColor" />{/each}
-              {:else if rating.icon === 'trash'}<Trash2 size={14} />
-              {:else if rating.icon === 'flame'}<Flame size={14} />{/if}
-            </span>
-          </div>
-        {/if}
       </div>
     {/if}
   </div>
@@ -182,11 +181,6 @@
 <style>
   .card { display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: inherit; transition: border-color 0.2s, box-shadow 0.2s; overflow: hidden; cursor: pointer; }
   .card:hover { border-color: var(--cyan-dim); box-shadow: 0 0 12px var(--cyan-glow); }
-  .card.unprocessed { opacity: 0.65; border-color: var(--border-glow); }
-  .card.unprocessed .cover-img { filter: grayscale(1) opacity(0.5); }
-  .card.unprocessed .card-body { opacity: 0.55; }
-  .card.unprocessed .card-author { opacity: 0.4; }
-  .card.unprocessed .card-title { color: var(--text-muted); }
   .card-cover { position: relative; width: 100%; aspect-ratio: 2/3; perspective: 1000px; background: var(--bg-surface); }
   .card-cover-inner { position: relative; width: 100%; height: 100%; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transition-delay: 0s; transform-style: preserve-3d; }
   .card-cover:hover .card-cover-inner { transform: rotateY(180deg) scale(1.05); transition-delay: 2s; }
@@ -203,6 +197,7 @@
   .back-desc::-webkit-scrollbar-track { background: transparent; }
   .back-desc::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: var(--radius); }
   .cover-actions { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
+  .rating-bar { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px 8px; background: rgba(0, 0, 0, 0.8); z-index: 3; }
   .card-body { padding: 14px 12px 8px 12px; display: flex; flex-direction: column; gap: 4px; }
   .title-author-group { display: flex; flex-direction: column; gap: 0; width: 100%; }
   .title-wrapper { height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; text-align: center; }
@@ -215,7 +210,7 @@
   .card-status-fallback { display: flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font-body); font-size: var(--fs-body); font-weight: 600; margin-top: 4px; width: 100%; }
   .card-properties { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .badge-row { display: flex; gap: 4px; width: 100%; min-width: 0; }
-  .card-badge { display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 2px 0; border: none; background: transparent; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; flex: 1; min-width: 0; }
+  .card-badge { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 0; border: none; background: transparent; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; flex: 1; min-width: 0; }
   .badge-author { min-width: 0; }
   .badge-series { color: var(--cyan); min-width: 0; }
   .badge-volume { color: var(--purple); min-width: 0; }
@@ -227,8 +222,6 @@
   .action-btn.delete { color: var(--danger); border-color: var(--danger); }
   .action-btn.delete:hover { border-color: var(--danger); background: rgba(239, 68, 68, 0.25); }
   .action-btn.delete:active { transform: scale(0.92); background: rgba(239, 68, 68, 0.35); }
-  .card-rating { display: flex; justify-content: center; width: 100%; padding-top: 4px; }
-.rating-display { display: inline-flex; align-items: center; gap: 2px; }
   .card-genres { display: flex; flex-direction: column; gap: 4px; width: 100%; }
   .genre-tag { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 2px 0; border: none; background: transparent; color: var(--cyan); font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; flex: 1; min-width: 0; }
   .genre-tag.more { opacity: 0.7; }

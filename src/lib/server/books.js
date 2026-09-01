@@ -89,8 +89,8 @@ const stmts = {
     LEFT JOIN series s ON s.id = b.series_id
     WHERE b.id = ?
   `),
-  create: db.prepare('INSERT INTO book_series (title, author, cover_url, rating, status, synopsis, notes, start_date, end_date, series_id, volume_number, total_volumes, source_url, processed, edi_correct_title, edi_correct_author, edi_correct_series, edi_correct_genres, edi_correct_synopsis) VALUES (@title, @author, @cover_url, @rating, @status, @synopsis, @notes, @start_date, @end_date, @series_id, @volume_number, @total_volumes, @source_url, @processed, @edi_correct_title, @edi_correct_author, @edi_correct_series, @edi_correct_genres, @edi_correct_synopsis)'),
-  update: db.prepare('UPDATE book_series SET title = @title, author = @author, cover_url = @cover_url, rating = @rating, status = @status, synopsis = @synopsis, notes = @notes, start_date = @start_date, end_date = @end_date, series_id = @series_id, volume_number = @volume_number, total_volumes = @total_volumes, source_url = @source_url, processed = @processed, edi_correct_title = @edi_correct_title, edi_correct_author = @edi_correct_author, edi_correct_series = @edi_correct_series, edi_correct_genres = @edi_correct_genres, edi_correct_synopsis = @edi_correct_synopsis, updated_at = datetime(\'now\') WHERE id = @id'),
+  create: db.prepare('INSERT INTO book_series (title, author, cover_url, rating, status, synopsis, notes, start_date, end_date, series_id, volume_number, total_volumes, source_url) VALUES (@title, @author, @cover_url, @rating, @status, @synopsis, @notes, @start_date, @end_date, @series_id, @volume_number, @total_volumes, @source_url)'),
+  update: db.prepare('UPDATE book_series SET title = @title, author = @author, cover_url = @cover_url, rating = @rating, status = @status, synopsis = @synopsis, notes = @notes, start_date = @start_date, end_date = @end_date, series_id = @series_id, volume_number = @volume_number, total_volumes = @total_volumes, source_url = @source_url, updated_at = datetime(\'now\') WHERE id = @id'),
   remove: db.prepare('DELETE FROM book_series WHERE id = ?'),
   getGenres: db.prepare('SELECT g.* FROM genres g JOIN book_genres bg ON bg.genre_id = g.id WHERE bg.book_id = ? ORDER BY g.name ASC'),
   setGenres: db.prepare('DELETE FROM book_genres WHERE book_id = ?'),
@@ -127,13 +127,7 @@ export function create(data) {
     series_id: data.series_id || null,
     volume_number: data.volume_number || 0,
     total_volumes: data.total_volumes || 0,
-    source_url: data.source_url || '',
-    processed: data.processed !== undefined ? (data.processed ? 1 : 0) : 0,
-    edi_correct_title: data.edi_correct_title !== undefined ? (data.edi_correct_title ? 1 : 0) : 0,
-    edi_correct_author: data.edi_correct_author !== undefined ? (data.edi_correct_author ? 1 : 0) : 0,
-    edi_correct_series: data.edi_correct_series !== undefined ? (data.edi_correct_series ? 1 : 0) : 0,
-    edi_correct_genres: data.edi_correct_genres !== undefined ? (data.edi_correct_genres ? 1 : 0) : 0,
-    edi_correct_synopsis: data.edi_correct_synopsis !== undefined ? (data.edi_correct_synopsis ? 1 : 0) : 0
+    source_url: data.source_url || ''
   });
   const id = info.lastInsertRowid;
   if (data.genre_ids && data.genre_ids.length) {
@@ -162,12 +156,6 @@ export function update(id, data) {
     volume_number: data.volume_number !== undefined ? data.volume_number : existing.volume_number,
     total_volumes: data.total_volumes !== undefined ? data.total_volumes : existing.total_volumes,
     source_url: data.source_url ?? existing.source_url,
-    processed: data.processed !== undefined ? (data.processed ? 1 : 0) : existing.processed,
-    edi_correct_title: data.edi_correct_title !== undefined ? (data.edi_correct_title ? 1 : 0) : existing.edi_correct_title,
-    edi_correct_author: data.edi_correct_author !== undefined ? (data.edi_correct_author ? 1 : 0) : existing.edi_correct_author,
-    edi_correct_series: data.edi_correct_series !== undefined ? (data.edi_correct_series ? 1 : 0) : existing.edi_correct_series,
-    edi_correct_genres: data.edi_correct_genres !== undefined ? (data.edi_correct_genres ? 1 : 0) : existing.edi_correct_genres,
-    edi_correct_synopsis: data.edi_correct_synopsis !== undefined ? (data.edi_correct_synopsis ? 1 : 0) : existing.edi_correct_synopsis,
     id: id
   });
   if (data.genre_ids !== undefined) {
@@ -182,8 +170,18 @@ export function update(id, data) {
 export function remove(id) {
   const book = getById(id);
   if (!book) return null;
+  stmts.setGenres.run(id);
   stmts.remove.run(id);
   return book;
+}
+
+export function removeMultiple(ids) {
+  if (!ids || ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const clearGenres = db.prepare(`DELETE FROM book_genres WHERE book_id IN (${placeholders})`);
+  clearGenres.run(...ids);
+  db.prepare(`DELETE FROM book_series WHERE id IN (${placeholders})`).run(...ids);
+  return ids;
 }
 
 export function checkDuplicate(title, author, excludeId = null, volumeNumber = null) {

@@ -1,13 +1,12 @@
 <script>
   import Modal from '$lib/components/operations/Modal.svelte';
-  import { Plus, ChevronLeft, ChevronRight, Check, X, CheckCircle2, Circle } from '@lucide/svelte';
+  import { Plus, ChevronLeft, ChevronRight, Check, X } from '@lucide/svelte';
   import DatePicker from '$lib/components/operations/DatePicker.svelte';
   import StarRating from './StarRating.svelte';
   import GenreCombobox from './GenreCombobox.svelte';
   import { notify } from '$lib/stores/notification.js';
-  import { agentStore } from '$lib/stores/agent.svelte.js';
 
-  let { book = null, genres = [], series = [], seriesBookCounts = {}, mode = 'edit', scrapedData = null, fullscreen = false, ondirty, onupdate, onsaveset, onacceptset, onediupdate, onretry, onrequestclose } = $props();
+  let { book = null, genres = [], series = [], seriesBookCounts = {}, mode = 'edit', scrapedData = null, fullscreen = false, ondirty, onupdate, onsaveset, onrequestclose } = $props();
 
   let editTitle = $state(book?.title || '');
   let editAuthor = $state(book?.author || '');
@@ -35,25 +34,6 @@
   let synopsisMode = $state('preview');
   let pendingSeries = $state(null);
   let userTouchedTitle = $state(false);
-  let metaDone = $state(false);
-  let synopsisDone = $state(false);
-  let ediHasRun = $state(false);
-  let ediProcessing = $derived(correctingSync || generatingSync);
-  let synopsisMaxChars = 600;
-  let synopsisCharCount = $derived(`${editSynopsis.length} / ${synopsisMaxChars}`);
-
-  let allConfirmed = $derived(ediCorrect.title && ediCorrect.author && ediCorrect.series && ediCorrect.genres && ediCorrect.synopsis);
-
-  function initEdiCorrect() {
-    return {
-      title: book?.edi_correct_title === 1,
-      author: book?.edi_correct_author === 1,
-      series: book?.edi_correct_series === 1,
-      genres: book?.edi_correct_genres === 1,
-      synopsis: book?.edi_correct_synopsis === 1
-    };
-  }
-  let ediCorrect = $state(initEdiCorrect());
 
   function toTitleCase(str) {
     if (!str) return '';
@@ -99,7 +79,6 @@
     if (book && book !== prevBook) {
       prevBook = book;
       editTitle = book.title || ''; editAuthor = book.author || ''; editSynopsis = book.synopsis || ''; editCoverUrl = book.cover_url || ''; editStatus = book.status || 'not_started'; editRating = book.rating || null; editStartDate = book.start_date || ''; editEndDate = book.end_date || ''; editGenreIds = book.genres?.map(g => g.id) || []; editSeriesId = book.series_id || null; editVolumeNumber = book.volume_number || 0; editTotalVolumes = book.total_volumes || 0; editSourceUrl = book.source_url || '';
-      ediCorrect = initEdiCorrect();
       pristine = snapshot();
     }
   });
@@ -141,12 +120,10 @@
       appliedScrapedRef = scrapedData;
       const d = scrapedData;
       if (mode === 'create' && d.title) {
-        // Auto-create the book immediately with scraped data
         const payload = {
           title: d.title, author: d.author || '', cover_url: d.cover_url || '',
           synopsis: d.synopsis || '', source_url: d.source_url || '',
-          genre_ids: d.genre_ids || [], status: 'not_started',
-          processed: 0
+          genre_ids: d.genre_ids || [], status: 'not_started'
         };
         if (d.series_name) {
           const existing = localSeries.find(s => s.name.toLowerCase() === d.series_name.toLowerCase());
@@ -161,16 +138,7 @@
           body: JSON.stringify(payload)
         }).then(async (res) => {
           if (res.ok) {
-            const created = await res.json();
-            agentStore.processNewBook(created.id, created.title, created.author);
-          } else if (res.status === 409) {
-            const listRes = await fetch('/lounge/books');
-            if (listRes.ok) {
-              const all = await listRes.json();
-              const titleKey = (payload.title || '').split(':')[0].trim().toLowerCase();
-              const match = all.find(b => b.title.toLowerCase().includes(titleKey));
-              if (match) agentStore.processNewBook(match.id, match.title, match.author);
-            }
+            await res.json();
           }
         });
         onrequestclose?.();
@@ -186,32 +154,6 @@
         coverIndex = 0;
         if (d.source_url) editSourceUrl = d.source_url;
         if (d.title) {
-          const cardIdx = agentStore.messages.length;
-          agentStore.open = true;
-          agentStore.messages.push({
-            sender: 'edi',
-            type: 'processing-card',
-            title: d.title,
-            taskLabel: 'Processing',
-            status: 'processing',
-            statusText: 'Processing',
-            message: 'Fetching metadata and generating synopsis...',
-            animIdx: agentStore.getNextCardAnim()
-          });
-          agentStore.saveHistory();
-          Promise.all([
-            handleGenerateSynopsis().catch(() => {}),
-            handleCorrectMetadata(d).catch(() => {})
-          ]).then(() => {
-            const updated = agentStore.messages[cardIdx];
-            if (updated) {
-              updated.status = 'complete';
-              updated.statusText = 'Complete';
-              updated.taskLabel = 'Complete';
-              updated.message = 'Metadata corrected and synopsis generated.';
-              agentStore.saveHistory();
-            }
-          });
           handleScrapedSeries(d.series_name, d.series_book_number, d.series_total_books);
         }
       }
@@ -276,7 +218,7 @@
   async function handleSave() {
     saving = true;
     try {
-      const payload = { title: editTitle, author: editAuthor, synopsis: editSynopsis, cover_url: editCoverUrl, status: editStatus, rating: editRating, start_date: editStartDate || null, end_date: editEndDate || null, genre_ids: editGenreIds, series_id: editSeriesId || null, volume_number: editSeriesId ? (editVolumeNumber || 0) : 0, total_volumes: editSeriesId ? (editTotalVolumes || 0) : 0, source_url: editSourceUrl, processed: 1, edi_correct_title: ediCorrect.title ? 1 : 0, edi_correct_author: ediCorrect.author ? 1 : 0, edi_correct_series: ediCorrect.series ? 1 : 0, edi_correct_genres: ediCorrect.genres ? 1 : 0, edi_correct_synopsis: ediCorrect.synopsis ? 1 : 0 };
+      const payload = { title: editTitle, author: editAuthor, synopsis: editSynopsis, cover_url: editCoverUrl, status: editStatus, rating: editRating, start_date: editStartDate || null, end_date: editEndDate || null, genre_ids: editGenreIds, series_id: editSeriesId || null, volume_number: editSeriesId ? (editVolumeNumber || 0) : 0, total_volumes: editSeriesId ? (editTotalVolumes || 0) : 0, source_url: editSourceUrl };
       let updated;
       if (mode === 'create') {
         const res = await fetch('/lounge/books', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -295,180 +237,8 @@
     } catch (e) { notify("Error: " + e.message); } finally { saving = false; }
   }
 
-  let generatingSync = $state(false);
-  let correctingSync = $state(false);
-
-  function checkEdiDone() {
-    if (metaDone && synopsisDone) {
-      ediHasRun = true;
-    }
-  }
-
-  $effect(() => {
-    onediupdate?.({ processing: ediProcessing, done: ediHasRun, allConfirmed });
-  });
-
-  $effect(() => {
-    onretry?.(handleRetry);
-  });
-
-  async function handleCorrectMetadata(d) {
-    if (!d?.title) return;
-    correctingSync = true;
-    try {
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'correct_book_metadata',
-          rawTitle: d.title,
-          rawAuthor: d.author || '',
-          rawSeriesName: d.series_name || '',
-          rawVolumeNumber: d.series_book_number ?? null,
-          rawTotalVolumes: d.series_total_books ?? null,
-          rawCategories: d.categories || [],
-          sourceUrl: d.source_url || ''
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.correction) {
-          const c = data.correction;
-          if (c.title && !userTouchedTitle) editTitle = toTitleCase(c.title);
-          if (c.author) editAuthor = c.author;
-          if (c.series_name) handleScrapedSeries(c.series_name, c.volume_number, c.total_volumes);
-          if (c.genres?.length) {
-            applyCorrectedGenres(c.genres.slice(0, 3));
-          }
-          notify("Metadata corrected by EDI.");
-        }
-      }
-    } catch (err) {
-      console.error('Metadata correction error:', err);
-    } finally {
-      correctingSync = false;
-      metaDone = true;
-      checkEdiDone();
-    }
-  }
-
-  async function applyCorrectedGenres(names) {
-    const ids = [];
-    for (const name of names) {
-      const existing = localGenres.find(g => g.name.toLowerCase() === name.toLowerCase());
-      if (existing) {
-        ids.push(existing.id);
-      } else {
-        try {
-          const res = await fetch('/api/genres', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-          });
-          if (res.ok) {
-            const g = await res.json();
-            localGenres = [...localGenres, g];
-            ids.push(g.id);
-          }
-        } catch {}
-      }
-    }
-    if (ids.length > 0) editGenreIds = ids;
-  }
-
-  async function handleGenerateSynopsis() {
-    if (!editTitle?.trim()) { notify("Please enter a title first."); return; }
-    generatingSync = true;
-    try {
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate_book_synopsis', title: editTitle.trim(), author: editAuthor?.trim() || '', charLimit: synopsisMaxChars })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.summary) {
-          editSynopsis = data.summary;
-          notify("Synopsis generated by EDI.");
-        } else {
-          throw new Error(data.error || "Synopsis generation failed");
-        }
-      } else {
-        const errText = await res.text().catch(() => 'Unknown error');
-        throw new Error(`API ${res.status}: ${errText}`);
-      }
-    } catch (err) {
-      notify("Error: " + err.message);
-      throw err;
-    } finally {
-      generatingSync = false;
-      synopsisDone = true;
-      checkEdiDone();
-    }
-  }
-
-  async function handleRetry() {
-    if (!editTitle?.trim()) return;
-
-    if (ediCorrect.title && ediCorrect.author && ediCorrect.genres && ediCorrect.series && ediCorrect.synopsis) {
-      notify("All fields confirmed. Nothing to retry.");
-      return { alreadyConfirmed: true };
-    }
-
-    metaDone = false;
-    synopsisDone = false;
-    ediHasRun = false;
-    let metadataOk = true;
-    let synopsisOk = true;
-
-    const seriesName = editSeriesId ? (localSeries.find(s => s.id === editSeriesId)?.name || '') : '';
-
-    if (!ediCorrect.title || !ediCorrect.author || !ediCorrect.genres || !ediCorrect.series) {
-      try {
-        await handleCorrectMetadata({
-          title: editTitle,
-          author: editAuthor,
-          series_name: seriesName,
-          series_book_number: editVolumeNumber || null,
-          series_total_books: editTotalVolumes || null,
-          categories: [],
-          source_url: editSourceUrl
-        });
-      } catch {
-        metadataOk = false;
-      }
-    } else {
-      metaDone = true;
-    }
-
-    if (!ediCorrect.synopsis) {
-      try {
-        await handleGenerateSynopsis();
-      } catch {
-        synopsisOk = false;
-      }
-    } else {
-      synopsisDone = true;
-    }
-
-    checkEdiDone();
-    return { metadataOk, synopsisOk };
-  }
-
-  async function handleAcceptAll() {
-    ediCorrect.title = true;
-    ediCorrect.author = true;
-    ediCorrect.series = true;
-    ediCorrect.genres = true;
-    ediCorrect.synopsis = true;
-    await handleSave();
-  }
-
   $effect(() => {
     onsaveset?.(handleSave);
-  });
-
-  $effect(() => {
-    onacceptset?.(handleAcceptAll);
   });
 
 </script>
@@ -560,9 +330,6 @@
     <div class="edit-fields-col">
       <div class="efield">
         <div class="label-row">
-          <button type="button" class="edi-toggle" onclick={() => { ediCorrect.series = !ediCorrect.series; }} title={ediCorrect.series ? 'Confirmed correct' : 'Needs review'}>
-            {#if ediCorrect.series}<CheckCircle2 size={17} color="var(--success)" />{:else}<Circle size={17} color="var(--text-dim)" />{/if}
-          </button>
           <span class="efield-label">Series</span>
         </div>
         {#if pendingSeries}
@@ -603,18 +370,12 @@
       {/if}
       <label class="efield">
         <div class="label-row">
-          <button type="button" class="edi-toggle" onclick={() => { ediCorrect.title = !ediCorrect.title; }} title={ediCorrect.title ? 'Confirmed correct' : 'Needs review'}>
-            {#if ediCorrect.title}<CheckCircle2 size={17} color="var(--success)" />{:else}<Circle size={17} color="var(--text-dim)" />{/if}
-          </button>
           <span class="efield-label">Title</span>
         </div>
         <input type="text" bind:value={editTitle} class="efield-input" oninput={() => { userTouchedTitle = true; }} />
       </label>
       <label class="efield">
         <div class="label-row">
-          <button type="button" class="edi-toggle" onclick={() => { ediCorrect.author = !ediCorrect.author; }} title={ediCorrect.author ? 'Confirmed correct' : 'Needs review'}>
-            {#if ediCorrect.author}<CheckCircle2 size={17} color="var(--success)" />{:else}<Circle size={17} color="var(--text-dim)" />{/if}
-          </button>
           <span class="efield-label">Author</span>
         </div>
         <input type="text" bind:value={editAuthor} class="efield-input" />
@@ -631,27 +392,20 @@
       </div>
       <div class="efield">
         <div class="label-row">
-          <button type="button" class="edi-toggle" onclick={() => { ediCorrect.genres = !ediCorrect.genres; }} title={ediCorrect.genres ? 'Confirmed correct' : 'Needs review'}>
-            {#if ediCorrect.genres}<CheckCircle2 size={17} color="var(--success)" />{:else}<Circle size={17} color="var(--text-dim)" />{/if}
-          </button>
           <span class="efield-label">Genres</span>
         </div>
         <GenreCombobox genres={localGenres} value={editGenreIds} onchange={(v) => { editGenreIds = v; }} oncreate={handleCreateGenre} />
       </div>
       <div class="efield synopsis-field">
         <div class="synopsis-header">
-          <button type="button" class="edi-toggle" onclick={() => { ediCorrect.synopsis = !ediCorrect.synopsis; }} title={ediCorrect.synopsis ? 'Confirmed correct' : 'Needs review'}>
-            {#if ediCorrect.synopsis}<CheckCircle2 size={17} color="var(--success)" />{:else}<Circle size={17} color="var(--text-dim)" />{/if}
-          </button>
           <span class="efield-label">Synopsis</span>
-          <span class="synopsis-charcount">{synopsisCharCount}</span>
           <div class="mode-toggles" style="margin-left: auto;">
             <button type="button" class="mode-btn" class:active={synopsisMode === 'edit'} onclick={() => synopsisMode = 'edit'}>Edit</button>
             <button type="button" class="mode-btn" class:active={synopsisMode === 'preview'} onclick={() => synopsisMode = 'preview'}>Preview</button>
           </div>
         </div>
         {#if synopsisMode === 'edit'}
-          <textarea bind:value={editSynopsis} class="efield-input etextarea synopsis-textarea" placeholder="Enter synopsis or let EDI auto-generate it when you fetch from a URL."></textarea>
+          <textarea bind:value={editSynopsis} class="efield-input etextarea synopsis-textarea" placeholder="Enter a synopsis for this book."></textarea>
         {:else}
           <div class="synopsis-preview synopsis-preview-box">{@html formatDesc(editSynopsis || 'No synopsis entered.')}</div>
         {/if}
@@ -697,7 +451,6 @@
   .etextarea { resize: vertical; min-height: 60px; }
   .synopsis-field { flex: 1; display: flex; flex-direction: column; }
   .synopsis-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .synopsis-charcount { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text-muted); white-space: nowrap; }
   .synopsis-textarea { min-height: 150px; }
   .synopsis-preview-box { min-height: 150px; }
   .synopsis-field .etextarea { flex: 1; }
@@ -742,8 +495,5 @@
   .synopsis-preview :global(em) { color: var(--cyan); font-weight: 600; font-style: normal; }
   .volume-hint { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text-muted); margin-top: -4px; padding: 0 2px; }
   .volume-warning { font-family: var(--font-body); font-size: var(--fs-small); color: var(--amber); font-weight: 600; margin-top: -4px; padding: 0 2px; }
-  .edi-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: none; cursor: pointer; padding: 0; flex-shrink: 0; transition: transform 0.15s; }
-  .edi-toggle:active { transform: scale(0.85); }
   .label-row { display: flex; align-items: center; gap: 6px; }
-  .synopsis-header > .edi-toggle { position: static; }
 </style>

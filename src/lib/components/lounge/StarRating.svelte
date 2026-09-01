@@ -20,9 +20,12 @@
   }
 </script>
 
-<div data-section="star-rating" class="rating-row">
+<div data-section="star-rating" class="rating-row" role="radiogroup" aria-label="Rating">
   <button
     type="button"
+    role="radio"
+    aria-checked={isTrash}
+    aria-label="Remove rating"
     class="rating-btn"
     class:active={isTrash}
     class:trash={isTrash}
@@ -35,11 +38,13 @@
     {#each [1, 2, 3, 4, 5] as n}
       <button
         type="button"
+        role="radio"
+        aria-checked={starVal === n}
+        aria-label="Rate {n} out of 5"
         class="star-btn"
         class:filled={n <= starVal}
         class:flame-active={isFlame}
         onclick={() => setRating(n)}
-        aria-label="{n} star"
       >
         <Star size={18} class={n <= starVal || isFlame ? 'fill' : ''} />
       </button>
@@ -47,6 +52,9 @@
   </span>
   <button
     type="button"
+    role="radio"
+    aria-checked={isFlame}
+    aria-label="Favorite"
     class="rating-btn"
     class:active={isFlame}
     class:flame={isFlame}

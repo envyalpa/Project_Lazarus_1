@@ -1,7 +1,10 @@
 import db from './db.js';
 import { bulkCreate } from './anime-seasons.js';
 
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_series_title ON anime_series(title COLLATE NOCASE)');
+
 const stmts = {
+  getByTitle: db.prepare('SELECT id FROM anime_series WHERE title = ? COLLATE NOCASE'),
   getAll: db.prepare(`
     SELECT a.*,
       (SELECT COUNT(*) FROM anime_seasons WHERE anime_id = a.id) as season_count,
@@ -45,6 +48,8 @@ export function getById(id) {
 }
 
 export function create(data) {
+  const existing = stmts.getByTitle.get(data.title);
+  if (existing) return { error: true, message: `Anime "${data.title}" already exists.` };
   const info = stmts.create.run({
     title: data.title,
     cover_url: data.cover_url || '',
@@ -69,6 +74,11 @@ export function create(data) {
 export function update(id, data) {
   const existing = getById(id);
   if (!existing) return null;
+  const newTitle = data.title ?? existing.title;
+  if (newTitle !== existing.title) {
+    const dup = stmts.getByTitle.get(newTitle);
+    if (dup && dup.id !== id) return { error: true, message: `Anime "${newTitle}" already exists.` };
+  }
   stmts.update.run({
     title: data.title ?? existing.title,
     cover_url: data.cover_url ?? existing.cover_url,
@@ -92,4 +102,11 @@ export function remove(id) {
   if (!anime) return null;
   stmts.remove.run(id);
   return anime;
+}
+
+export function removeMultiple(ids) {
+  if (!ids || ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  db.prepare(`DELETE FROM anime_series WHERE id IN (${placeholders})`).run(...ids);
+  return ids;
 }

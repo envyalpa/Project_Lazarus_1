@@ -1,6 +1,6 @@
 ﻿<script>
   import { onMount } from 'svelte';
-  import { ShieldAlert, RefreshCw, Cpu, CheckCircle, Database, Coins, KeyRound, TriangleAlert, History } from '@lucide/svelte';
+  import { ShieldAlert, RefreshCw, Cpu, CheckCircle, Database, Coins, KeyRound, TriangleAlert, History, ChevronDown } from '@lucide/svelte';
   import Panel from '$lib/components/Panel.svelte';
   import Modal from '$lib/components/operations/Modal.svelte';
   import PromptsManagerModal from '$lib/components/settings/PromptsManagerModal.svelte';
@@ -8,7 +8,6 @@
 
   let config = $state({
     googleApiKey: '',
-    deepseekApiKey: '',
     opencodeApiKey: '',
     opencodeBaseUrl: 'https://opencode.ai/zen/go/v1',
     opencodeModel: 'deepseek-v4-flash',
@@ -28,88 +27,45 @@
   let savedConfig = $state({});
   let hasUnsavedChanges = $derived(JSON.stringify(config) !== JSON.stringify(savedConfig));
 
+  let opencodeModels = $state({ free: [], go: [] });
+  let isFetchingModels = $state(false);
+  let modelListLoaded = $state(false);
+  let showModelPicker = $state(false);
+
+  const geminiModels = [
+    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Latest - High reasoning capability)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Ultra-fast, low VRAM)' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (High intelligence)' }
+  ];
+
   let currentModelLabel = $derived.by(() => {
-    const opts = modelOptions[config.agentProvider || 'gemini'] || [];
-    const found = opts.find(o => o.value === config.agentModel);
+    if (config.agentProvider === 'opencode') {
+      const found = [...opencodeModels.go, ...opencodeModels.free].find(o => o.value === config.agentModel);
+      return found ? found.label : config.agentModel || 'Not set';
+    }
+    const found = geminiModels.find(o => o.value === config.agentModel);
     return found ? found.label : config.agentModel || 'Not set';
   });
 
-  const modelOptions = {
-    google: [
-      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Latest - High reasoning capability)' },
-      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Ultra-fast, low VRAM)' },
-      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (High intelligence)' }
-    ],
-    gemini: [
-      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Latest - High reasoning capability)' },
-      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Ultra-fast, low VRAM)' },
-      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (High intelligence)' }
-    ],
-    deepseek: [
-      { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (New - MoE, highly efficient)' },
-      { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro (New - Flagship reasoning)' },
-      { value: 'deepseek-chat', label: 'DeepSeek Chat V3 (Legacy Chat - Deprecating July 2026)' },
-      { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner R1 (Legacy Reasoner - Deprecating July 2026)' }
-    ],
-    huggingface: [
-      { value: 'meta-llama/Llama-3.3-70B-Instruct', label: 'Llama 3.3 70B Instruct' },
-      { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen 2.5 72B Instruct' }
-    ],
-    nvidia: [
-      { value: 'google/diffusiongemma-26b-a4b-it', label: 'DiffusionGemma 26B (Reasoning Enabled)' },
-      { value: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron-3 Ultra 550B' },
-      { value: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro (NVIDIA NIM)' },
-      { value: 'deepseek-ai/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
-      { value: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
-      { value: 'mistralai/mistral-nemotron', label: 'Mistral Nemotron' }
-    ],
-    ollama: [
-      { value: 'llama3', label: 'Llama 3' },
-      { value: 'mistral', label: 'Mistral' },
-      { value: 'phi3', label: 'Phi 3' }
-    ],
-    opencode: [
-      { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (Fast, low cost)' },
-      { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro (High intelligence)' },
-      { value: 'glm-5.2', label: 'GLM-5.2 (Frontier performance)' },
-      { value: 'glm-5.1', label: 'GLM-5.1 (High performance)' },
-      { value: 'kimi-k2.7-code', label: 'Kimi K2.7 Code (Specialized coding)' },
-      { value: 'kimi-k2.6', label: 'Kimi K2.6 (General purpose)' },
-      { value: 'mimo-v2.5', label: 'MiMo V2.5 (Lightweight)' },
-      { value: 'mimo-v2.5-pro', label: 'MiMo V2.5 Pro (Enhanced)' },
-      { value: 'minimax-m3', label: 'MiniMax M3 (Latest)' },
-      { value: 'minimax-m2.7', label: 'MiniMax M2.7 (Balanced)' },
-      { value: 'qwen3.7-max', label: 'Qwen3.7 Max (Top-tier reasoning)' },
-      { value: 'qwen3.7-plus', label: 'Qwen3.7 Plus (Fast, affordable)' },
-      { value: 'qwen3.6-plus', label: 'Qwen3.6 Plus (Legacy, stable)' }
-    ],
-    openrouter: [
-      { value: 'openrouter/free', label: 'Auto: Best free model for your request' },
-      { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free — frontier reasoning)' },
-      { value: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (Free)' },
-      { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct (Free)' },
-      { value: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder (Free — strongest coding)' },
-      { value: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free — reasoning)' },
-      { value: 'deepseek/deepseek-v3:free', label: 'DeepSeek V3 (Free — general)' },
-      { value: 'nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B (Free)' },
-      { value: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (Free)' },
-      { value: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (Free)' },
-      { value: 'mistralai/mistral-small-24b-instruct:free', label: 'Mistral Small 24B (Free)' },
-      { value: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B (Free)' },
-      { value: 'meta-llama/llama-3.2-3b-instruct:free', label: 'Llama 3.2 3B (Free — fast/light)' }
-    ],
-    groq: [
-      { value: 'kimi-k2-instruct', label: 'Kimi K2 262K (Free — frontier reasoning)' },
-
-      { value: 'qwen/qwen3-32b', label: 'Qwen3 32B (Free)' },
-      { value: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Free)' },
-      { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B (Free — 750 TPS)' },
-      { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Free — fastest, 840 TPS)' },
-      { value: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Free)' },
-      { value: 'groq/compound', label: 'Groq Compound (Free — agentic)' },
-      { value: 'groq/compound-mini', label: 'Groq Compound Mini (Free)' }
-    ]
-  };
+  async function fetchOpencodeModels() {
+    isFetchingModels = true;
+    try {
+      const res = await fetch('/settings/edi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fetch-opencode-models' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        opencodeModels = data.models;
+        modelListLoaded = true;
+        if (config.agentProvider === 'opencode' && ![...opencodeModels.go, ...opencodeModels.free].some(o => o.value === config.agentModel)) {
+          config.agentModel = opencodeModels.go[0]?.value || opencodeModels.free[0]?.value || '';
+        }
+      }
+    } catch {}
+    isFetchingModels = false;
+  }
 
   async function loadSettings() {
     try {
@@ -117,6 +73,10 @@
       if (res.ok) {
         const data = await res.json();
         config = data.config;
+        if (!['gemini', 'opencode'].includes(config.agentProvider)) {
+          config.agentProvider = 'gemini';
+          config.agentModel = geminiModels[0]?.value || '';
+        }
         savedConfig = { ...data.config };
         monthlySpending = data.monthlySpending || 0;
         usageStats = data.usageStats || [];
@@ -163,6 +123,16 @@
 
   onMount(() => {
     loadSettings();
+    fetchOpencodeModels();
+  });
+
+  $effect(() => {
+    if (!showModelPicker) return;
+    function onDocClick(e) {
+      if (!e.target?.closest?.('.model-picker')) showModelPicker = false;
+    }
+    window.addEventListener('mousedown', onDocClick);
+    return () => window.removeEventListener('mousedown', onDocClick);
   });
 
   let budgetPercent = $derived(Math.min(100, Math.round((monthlySpending / config.monthlyTokenBudget) * 100)));
@@ -205,33 +175,91 @@
     <div class="left-col">
       <Panel title="Agent Options" icon={Cpu} class="equal-height-panel">
         {#snippet headerRight()}
-          <span class="current-model-badge">{currentModelLabel}</span>
+          {#if config.agentProvider === 'opencode'}
+            <button class="model-refresh-btn" onclick={fetchOpencodeModels} disabled={isFetchingModels} title="Refresh model list" data-label="refresh-opencode-models">
+              <RefreshCw size={14} class={isFetchingModels ? 'animate-spin' : ''} />
+            </button>
+          {/if}
+          <span class="current-model-badge">
+            {currentModelLabel}
+          </span>
         {/snippet}
         <div class="panel-body equal-height-body" data-section="agent-options">
           <div class="field-row">
             <div class="field-compact">
               <label for="agent-provider">Agent Provider</label>
               <select id="agent-provider" bind:value={config.agentProvider} onchange={() => {
-                config.agentModel = modelOptions[config.agentProvider || 'gemini']?.[0]?.value || '';
+                if (config.agentProvider === 'gemini') {
+                  config.agentModel = geminiModels[0]?.value || '';
+                } else {
+                  config.agentModel = opencodeModels.go[0]?.value || opencodeModels.free[0]?.value || '';
+                }
               }}>
                 <option value="gemini">Google Gemini API</option>
-                <option value="deepseek">DeepSeek AI</option>
-                <option value="huggingface">Hugging Face Cloud</option>
-                <option value="nvidia">Nvidia NIM Cloud</option>
-                <option value="openrouter">OpenRouter (Free Models)</option>
-                <option value="groq">Groq (Free Tier)</option>
                 <option value="opencode">OpenCode Go (Subscription)</option>
-                <option value="ollama">Ollama (Local Host)</option>
               </select>
             </div>
 
             <div class="field-compact">
               <label for="agent-model">Agent Model</label>
-              <select id="agent-model" bind:value={config.agentModel}>
-                {#each modelOptions[config.agentProvider || 'gemini'] || [] as opt}
-                  <option value={opt.value}>{opt.label}</option>
-                {/each}
-              </select>
+              {#if config.agentProvider === 'opencode'}
+                <div class="model-picker" data-section="agent-model-picker">
+                  <button
+                    class="model-picker-trigger"
+                    onclick={(e) => { e.stopPropagation(); showModelPicker = !showModelPicker; }}
+                  >
+                    <span class="model-picker-label">{currentModelLabel}</span>
+                    <ChevronDown size={14} class="model-picker-chev" />
+                  </button>
+
+                  {#if showModelPicker}
+                    <div class="model-picker-popover" onclick={(e) => e.stopPropagation()}>
+                      <div class="model-group">
+                        <div class="model-group-header">
+                          <span class="model-tag tag-go">Go</span>
+                          <span>Subscription Models</span>
+                        </div>
+                        {#each opencodeModels.go as opt}
+                          <button
+                            class="model-row {opt.value === config.agentModel ? 'selected' : ''}"
+                            onclick={() => { config.agentModel = opt.value; showModelPicker = false; }}
+                          >
+                            <span class="model-row-label">{opt.label}</span>
+                            <span class="model-tag tag-go">Go</span>
+                          </button>
+                        {/each}
+                      </div>
+                      <div class="model-picker-divider"></div>
+                      <div class="model-group">
+                        <div class="model-group-header">
+                          <span class="model-tag tag-free">Free</span>
+                          <span>Free Models</span>
+                        </div>
+                        {#each opencodeModels.free as opt}
+                          <button
+                            class="model-row {opt.value === config.agentModel ? 'selected' : ''}"
+                            onclick={() => { config.agentModel = opt.value; showModelPicker = false; }}
+                          >
+                            <span class="model-row-label">{opt.label}</span>
+                            <span class="model-tag tag-free">Free</span>
+                          </button>
+                        {/each}
+                      </div>
+                      {#if !modelListLoaded}
+                        <div class="model-loading">
+                          <RefreshCw size={13} class="animate-spin" /> Loading models...
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <select id="agent-model" bind:value={config.agentModel}>
+                  {#each geminiModels as opt}
+                    <option value={opt.value}>{opt.label}</option>
+                  {/each}
+                </select>
+              {/if}
             </div>
           </div>
 
@@ -273,31 +301,6 @@
           <div class="field-compact" style="margin-top: 14px;">
             <label for="google-books-key">Google Books API Key</label>
             <input id="google-books-key" type="password" placeholder="AIzaSy..." bind:value={config.googleBooksApiKey} />
-          </div>
-
-          <div class="field-compact" style="margin-top: 14px;">
-            <label for="deepseek-key">DeepSeek API Key</label>
-            <input id="deepseek-key" type="password" placeholder="sk-..." bind:value={config.deepseekApiKey} />
-          </div>
-
-          <div class="field-compact" style="margin-top: 14px;">
-            <label for="hf-key">Hugging Face Access Token</label>
-            <input id="hf-key" type="password" placeholder="hf_..." bind:value={config.hfApiKey} />
-          </div>
-
-          <div class="field-compact" style="margin-top: 14px;">
-            <label for="nvidia-key">Nvidia NIM API Key</label>
-            <input id="nvidia-key" type="password" placeholder="nvapi-..." bind:value={config.nvidiaApiKey} />
-          </div>
-
-          <div class="field-compact" style="margin-top: 14px;">
-            <label for="openrouter-key">OpenRouter API Key</label>
-            <input id="openrouter-key" type="password" placeholder="sk-or-..." bind:value={config.openrouterApiKey} />
-          </div>
-
-          <div class="field-compact" style="margin-top: 14px;">
-            <label for="groq-key">Groq API Key</label>
-            <input id="groq-key" type="password" placeholder="gsk_..." bind:value={config.groqApiKey} />
           </div>
 
           <div class="field-compact" style="margin-top: 14px;">
@@ -363,29 +366,19 @@
               <span>$0.30</span>
             </div>
             <div class="price-row">
-              <span class="model-name">DeepSeek V4 Flash</span>
+              <span class="model-name">OpenCode Go — DeepSeek V4 Flash</span>
               <span>$0.14</span>
               <span>$0.28</span>
             </div>
             <div class="price-row">
-              <span class="model-name">DeepSeek V4 Pro</span>
-              <span>$0.435</span>
-              <span>$0.87</span>
+              <span class="model-name">OpenCode Go — DeepSeek V4 Pro</span>
+              <span>$1.74</span>
+              <span>$3.48</span>
             </div>
             <div class="price-row">
-              <span class="model-name">DeepSeek V4 Pro (NVIDIA)</span>
-              <span>$0.435</span>
-              <span>$0.87</span>
-            </div>
-            <div class="price-row">
-              <span class="model-name">DiffusionGemma 26B (NVIDIA)</span>
-              <span>$0.70</span>
-              <span>$0.70</span>
-            </div>
-            <div class="price-row">
-              <span class="model-name">Nemotron-3 Ultra 550B (NVIDIA)</span>
-              <span>$0.00 (Free)</span>
-              <span>$0.00 (Free)</span>
+              <span class="model-name">OpenCode Go — GLM-5.2</span>
+              <span>$1.40</span>
+              <span>$4.40</span>
             </div>
           </div>
           <button class="btn btn-ghost" style="width: 100%; margin-top: 12px; justify-content: center;" onclick={updatePricing} disabled={isUpdatingPricing}>
@@ -448,7 +441,30 @@
     justify-content: center;
   }
   
-  .current-model-badge { font-family: var(--font-caption); font-size: var(--fs-caption); color: var(--cyan-dim); border: 1px solid var(--cyan-dim); border-radius: var(--radius); padding: 2px 10px; white-space: nowrap; }
+  .current-model-badge { font-family: var(--font-caption); font-size: var(--fs-caption); color: var(--cyan-dim); border: 1px solid var(--cyan-dim); border-radius: var(--radius); padding: 2px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .model-refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; transition: all 0.2s; }
+  .model-refresh-btn:hover { color: var(--cyan); border-color: var(--cyan-dim); background: var(--bg-card); }
+  .model-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .model-tag { display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 6px; border-radius: 4px; line-height: 1.6; }
+  .tag-free { color: var(--success); border: 1px solid var(--success); background: rgba(34, 197, 94, 0.1); }
+  .tag-go { color: var(--purple); border: 1px solid var(--purple); background: rgba(168, 85, 247, 0.1); }
+
+  .model-picker { position: relative; }
+  .model-picker-trigger { display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; font-family: var(--font-body); font-size: var(--fs-body); color: var(--text); cursor: pointer; transition: all 0.2s; box-sizing: border-box; }
+  .model-picker-trigger:hover { border-color: var(--cyan-dim); }
+  .model-picker-label { flex: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; text-align: left; }
+  .model-picker-chev { color: var(--text-dim); flex-shrink: 0; }
+  .model-picker-popover { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 60; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 0 30px rgba(0, 0, 0, 0.5); max-height: 300px; overflow-y: auto; padding: 8px; }
+  .model-group { display: flex; flex-direction: column; gap: 2px; }
+  .model-group-header { display: flex; align-items: center; gap: 8px; font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; }
+  .model-picker-divider { height: 1px; background: var(--border); margin: 6px 0; }
+  .model-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 7px 10px; background: transparent; border: 1px solid transparent; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-dim); cursor: pointer; text-align: left; transition: all 0.15s; }
+  .model-row:hover { background: var(--bg-elevated); color: var(--cyan); }
+  .model-row.selected { border-color: var(--cyan); background: var(--bg-elevated); color: var(--text); }
+  .model-row-label { flex: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+  .model-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-muted); }
+
   .warning-banner { display: flex; gap: 14px; padding: 14px 18px; background: rgba(239, 68, 68, 0.08); border: 1px solid var(--danger); border-radius: var(--radius); align-items: flex-start; }
   .warn-icon { color: var(--danger); flex-shrink: 0; margin-top: 2px; }
   .warn-title { font-family: var(--font-heading-1); font-size: var(--fs-heading-2); font-weight: 700; color: var(--text); margin: 0 0 4px 0; }
@@ -464,6 +480,7 @@
   .field-compact { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
   .field-compact label { font-family: var(--font-caption); font-size: var(--fs-caption); font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
   .field-compact input, .field-compact select { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; font-family: var(--font-body); font-size: var(--fs-body); color: var(--text); box-sizing: border-box; width: 100%; transition: all 0.2s; }
+  .field-compact select { height: 40px; }
   .field-compact textarea { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; font-family: var(--font-mono); font-size: var(--fs-body); color: var(--text); box-sizing: border-box; width: 100%; transition: all 0.2s; resize: vertical; line-height: 1.4; }
   .field-compact input:focus, .field-compact select:focus, .field-compact textarea:focus { border-color: var(--cyan); outline: none; box-shadow: 0 0 8px var(--cyan-glow); }
   .field-hint { font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-muted); margin: 4px 0 0 0; }

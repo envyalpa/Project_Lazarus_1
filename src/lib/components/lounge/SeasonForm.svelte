@@ -15,7 +15,7 @@
 </script>
 
 <Modal title={isEdit ? 'Edit Season' : 'Add Season'} open={true} onclose={oncancel}>
-  <div class="form-body">
+  <div class="form-body" data-section="season-form">
     <label class="field">
       <span class="field-label">Season Number</span>
       <input type="number" bind:value={seasonNumber} min="1" class="field-input" />

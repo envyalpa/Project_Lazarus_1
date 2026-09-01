@@ -492,7 +492,7 @@ export async function POST({ request }) {
     return json({ error: 'Invalid URL' }, { status: 400 });
   }
 
-  const isbnMatch = url.match(/(?:isbn|ISBN)[=/:]?\s*(\d{10,13})/) || url.match(/amazon\.\w+\/dp\/([A-Z0-9]{10})/);
+  const isbnMatch = url.match(/(?:isbn|ISBN)[=/:]?\s*(\d{10,13})/) || url.match(/amazon\.\w+.*?\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
   const openLibMatch = url.match(/openlibrary\.org\/(?:books|works)\/([^\s/?#]+)/);
   const goodReadsMatch = url.match(/goodreads\.com\/book\/show\/(\d+)/);
   const amazonMatch = url.match(/amazon\.\w+/i) || url.match(/amzn\.\w+/i);

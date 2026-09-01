@@ -1,6 +1,5 @@
 <script>
-  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search, LoaderCircle, RefreshCw, Sparkles } from '@lucide/svelte';
-  import { agentStore } from '$lib/stores/agent.svelte.js';
+  import { ArrowLeft, X, BookOpen, Trash2, Save, Maximize2, Minimize2, Search } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import { notify } from '$lib/stores/notification.js';
   import Panel from '$lib/components/Panel.svelte';
@@ -65,81 +64,8 @@
   let formSave = $state(null);
   let formDirty = $state(false);
   const setFormSave = (fn) => { formSave = fn; };
-  let formAccept = $state(null);
-  const setFormAccept = (fn) => { formAccept = fn; };
   let scrapedData = $state(null);
-  let ediProcessing = $state(false);
-  let ediDone = $state(false);
-  let allConfirmed = $state(false);
-  let formRetry = $state(null);
   const handleDirty = (d) => { formDirty = d; };
-  const setEdiState = (s) => { ediProcessing = s.processing; ediDone = s.done; allConfirmed = s.allConfirmed ?? false; };
-  const setRetry = (fn) => { formRetry = fn; };
-  async function handleRetryClick() {
-    agentStore.open = true;
-    const idx = agentStore.messages.length;
-    agentStore.messages.push({
-      sender: 'edi',
-      type: 'processing-card',
-      title: book?.title || 'Book',
-      taskLabel: 'Retrying',
-      status: 'processing',
-      statusText: 'Processing',
-      message: 'Re-running metadata correction and synopsis generation...',
-      animIdx: agentStore.getNextCardAnim()
-    });
-    agentStore.saveHistory();
-    const result = await formRetry?.();
-    if (!result) {
-      agentStore.messages[idx] = {
-        ...agentStore.messages[idx],
-        status: 'failed',
-        statusText: 'Failed',
-        taskLabel: 'Failed',
-        message: `EDI could not process "${book?.title}". Please check the title and try again.`
-      };
-      agentStore.saveHistory();
-      return;
-    }
-    if (result.alreadyConfirmed) {
-      agentStore.messages[idx] = {
-        ...agentStore.messages[idx],
-        status: 'complete',
-        statusText: 'Complete',
-        taskLabel: 'Complete',
-        message: `All fields already confirmed for "${book?.title}". Nothing to retry.`
-      };
-      agentStore.saveHistory();
-      return;
-    }
-    const metadataOk = result.metadataOk !== false;
-    const synopsisOk = result.synopsisOk !== false;
-    if (metadataOk || synopsisOk) {
-      await formAccept?.();
-      const resultMsg = metadataOk && !synopsisOk
-        ? `Metadata corrected for "${book?.title}", but synopsis generation failed.`
-        : `EDI corrections saved for "${book?.title}".`;
-      agentStore.messages[idx] = {
-        ...agentStore.messages[idx],
-        status: 'complete',
-        statusText: 'Complete',
-        taskLabel: 'Complete',
-        message: resultMsg
-      };
-      notify(resultMsg);
-    } else {
-      agentStore.messages[idx] = {
-        ...agentStore.messages[idx],
-        status: 'failed',
-        statusText: 'Failed',
-        taskLabel: 'Failed',
-        message: `EDI encountered an issue while processing "${book?.title}". Please try again.`
-      };
-      notify("EDI encountered an error during processing.");
-    }
-    agentStore.saveHistory();
-  }
-
   function handleScraped(data) {
     scrapedData = { ...data };
   }
@@ -213,21 +139,6 @@
       {#snippet editHeaderLeft()}<button type="button" class="panel-header-btn" onclick={handleClose} title="Back"><ArrowLeft size={16} /> <span class="back-label">Back</span></button>{/snippet}
       {#snippet editHeaderRight()}
           {#if mode === 'edit' && !fullscreen}
-          {#if allConfirmed}
-            <span class="edi-badge processed">PROCESSED</span>
-          {:else if ediProcessing}
-            <span class="edi-badge processing"><LoaderCircle size={14} class="edi-spin" /> Retrying...</span>
-          {:else}
-            {#if ediDone}
-              <span class="edi-badge complete">UPDATED</span>
-            {/if}
-            <button type="button" class="edi-badge accept-btn" onclick={formAccept} disabled={saving}>
-              ACCEPT
-            </button>
-            <button type="button" class="edi-badge retry-btn" onclick={handleRetryClick} title="Re-run EDI processing">
-              <RefreshCw size={14} />
-            </button>
-          {/if}
         {/if}
         <button type="button" class="panel-header-btn save-btn icon-btn" onclick={async () => { if (formDirty && formSave) await formSave(); if (notesDirty) await saveNotes(); }} disabled={!hasUnsavedChanges || saving} title={hasUnsavedChanges ? 'Save changes' : 'All saved'}>
           <Save size={16} style={hasUnsavedChanges ? 'color:var(--amber)' : 'color:var(--success)'} />
@@ -243,7 +154,7 @@
       <div class="detail-grid" class:fullscreen class:single-col={mode === 'create'}>
         <div class="left-col">
           <Panel title={mode === 'create' ? 'Add Book' : 'Edit Book'} icon={BookOpen} stretch={true} headerLeft={editHeaderLeft} headerRight={editHeaderRight}>
-            <BookDetailForm {book} {genres} series={series} {seriesBookCounts} {mode} {scrapedData} {fullscreen} onsaveset={setFormSave} onacceptset={setFormAccept} ondirty={handleDirty} onupdate={handleFormUpdate} onediupdate={setEdiState} onretry={setRetry} onrequestclose={onRequestClose} />
+            <BookDetailForm {book} {genres} series={series} {seriesBookCounts} {mode} {scrapedData} {fullscreen} onsaveset={setFormSave} ondirty={handleDirty} onupdate={handleFormUpdate} onrequestclose={onRequestClose} />
           </Panel>
           {#if !fullscreen && mode === 'edit'}
             <div transition:slide={{ duration: 250 }}>
@@ -345,16 +256,5 @@
   .btn-stay { border-color: var(--amber); color: var(--amber); }
   .btn-stay:hover { background: rgba(255, 140, 0, 0.1); }
   .loading { display: flex; align-items: center; justify-content: center; padding: 60px; font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-dim); }
-  .edi-badge { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--radius); font-family: var(--font-body); font-size: var(--fs-small); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; box-sizing: border-box; }
-  .edi-badge.processing { background: rgba(0, 212, 255, 0.1); border: 1px solid var(--cyan-dim); color: var(--cyan); cursor: default; }
-  .edi-badge.accept-btn { background: rgba(34, 197, 94, 0.12); border: 1px solid var(--success); color: var(--success); cursor: pointer; transition: all 0.15s; }
-  .edi-badge.accept-btn:hover { background: rgba(34, 197, 94, 0.22); }
-  .edi-badge.accept-btn:active { transform: scale(0.95); }
-  .edi-badge.retry-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); width: 32px; justify-content: center; padding: 4px; cursor: pointer; transition: all 0.15s; }
-  .edi-badge.retry-btn:hover { border-color: var(--cyan-dim); color: var(--cyan); }
-  .edi-badge.processed { background: rgba(34, 197, 94, 0.12); border: 1px solid var(--success); color: var(--success); cursor: default; }
-  .edi-badge.complete { background: rgba(0, 212, 255, 0.1); border: 1px solid var(--cyan); color: var(--cyan); cursor: default; }
-  @keyframes edi-spin { to { transform: rotate(360deg); } }
-  .edi-spin { animation: edi-spin 1s linear infinite; }
   :global(.modal.full:has(.detail-modal-body)) { max-width: 85vw; width: 85vw; height: 85vh; }
 </style>

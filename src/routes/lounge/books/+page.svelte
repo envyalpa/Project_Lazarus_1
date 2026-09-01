@@ -1,13 +1,13 @@
 <script>
-  import { Plus, ArrowUpDown, LayoutGrid, Table, Pencil, Trash2, Star, Flame, ListChecks, Minimize2, Equal, Maximize2, Filter, X } from '@lucide/svelte';
+  import { Plus, ArrowUpDown, LayoutGrid, Table, Pencil, Trash2, Star, Flame, ListChecks, Minimize2, Equal, Maximize2, Filter, X, BookOpen, Users, BookMarked, Tags } from '@lucide/svelte';
   import { notify } from '$lib/stores/notification.js';
-  import { invalidate } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import Panel from '$lib/components/Panel.svelte';
   import BookCard from '$lib/components/lounge/BookCard.svelte';
   import BookDetailModal from '$lib/components/lounge/BookDetailModal.svelte';
   import Modal from '$lib/components/operations/Modal.svelte';
   import DeleteConfirm from '$lib/components/operations/DeleteConfirm.svelte';
-  import BooksCollectionTitle from '$lib/components/lounge/BooksCollectionTitle.svelte';
 
   let { data } = $props();
   let books = $state(data.books);
@@ -29,6 +29,16 @@
   let activeBook = $state(undefined);
   let cardDensity = $state('normal');
   let statusFilter = $state(loadFilter());
+  let selectedItems = $state([]);
+  let showBulkDelete = $state(false);
+
+  $effect(() => {
+    if ($page.url.searchParams.has('open')) {
+      const id = $page.url.searchParams.get('open');
+      activeBook = books.find(b => b.id == id) || undefined;
+      goto('/lounge/books', { replaceState: true });
+    }
+  });
 
   const filterOrder = ['all', 'not_started', 'reading', 'completed', 'not_purchased'];
   const filterLabels = { all: 'All', not_started: 'Not Started', reading: 'Reading', completed: 'Finished', not_purchased: 'Not Purchased' };
@@ -117,6 +127,34 @@
     deleteItem = null;
   }
 
+  function toggleAll() {
+    if (selectedItems.length === sorted.length) {
+      selectedItems = [];
+    } else {
+      selectedItems = sorted.map(s => s.id);
+    }
+  }
+
+  function toggleOne(id) {
+    if (selectedItems.includes(id)) {
+      selectedItems = selectedItems.filter(i => i !== id);
+    } else {
+      selectedItems = [...selectedItems, id];
+    }
+  }
+
+  async function handleBulkDelete() {
+    await fetch('/lounge/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bulk_delete: true, ids: selectedItems })
+    });
+    books = books.filter(b => !selectedItems.includes(b.id));
+    notify("Commander, " + selectedItems.length + " books deleted.");
+    selectedItems = [];
+    showBulkDelete = false;
+  }
+
   function openEdit(item) { activeBook = item; }
 
   function handleSelect(item) { activeBook = item; }
@@ -133,7 +171,12 @@
 
 <div data-section="books-page" class="books-page">
   <div class="page-toolbar">
-    <BooksCollectionTitle value="library" />
+    <div class="toolbar-tabs">
+      <a href="/lounge/books" class="tab-btn active"><BookOpen size={16} /><span>Book Library</span></a>
+      <a href="/lounge/authors" class="tab-btn"><Users size={16} /><span>Authors</span></a>
+      <a href="/lounge/series" class="tab-btn"><BookMarked size={16} /><span>Series</span></a>
+      <a href="/lounge/genres" class="tab-btn"><Tags size={16} /><span>Genres</span></a>
+    </div>
     <div class="toolbar-actions">
       {#if genreFilter !== null}
         <button type="button" class="tool-btn filter-btn filter-active" onclick={() => { genreFilter = null; }} title="Clear genre filter">
@@ -216,9 +259,18 @@
       </div>
     {:else}
       <div data-section="books-table" class="table-wrap">
+        {#if selectedItems.length > 0}
+          <div data-label="multi-select-toolbar" class="multi-toolbar">
+            <span class="selected-count">{selectedItems.length} selected</span>
+            <button type="button" class="bulk-delete-btn" onclick={() => { showBulkDelete = true; }}>
+              <Trash2 size={14} /> Delete Selected
+            </button>
+          </div>
+        {/if}
         <table>
           <thead>
             <tr>
+              <th class="col-check"><input type="checkbox" checked={selectedItems.length === sorted.length && sorted.length > 0} onchange={toggleAll} /></th>
               <th>Title</th>
               <th>Series</th>
               <th>Author</th>
@@ -231,6 +283,7 @@
           <tbody>
             {#each sorted as item (item.id)}
               <tr>
+                <td class="col-check"><input type="checkbox" checked={selectedItems.includes(item.id)} onchange={() => toggleOne(item.id)} /></td>
                 <td><button type="button" class="table-link-btn" onclick={() => handleSelect(item)}>{item.title}</button></td>
                 <td><span class="series-cell">{item.series_name ? item.series_name + (item.volume_number > 0 ? ' Vol ' + item.volume_number : '') : '—'}</span></td>
                 <td><span class="author-cell">{item.author || '—'}</span></td>
@@ -262,6 +315,12 @@
   </Modal>
 {/if}
 
+{#if showBulkDelete}
+  <Modal open={true} noHeader={true} compact onclose={() => { showBulkDelete = false; }}>
+    <DeleteConfirm title="Delete Selected Books" item={{ name: selectedItems.length + ' books', id: null }} onconfirm={() => handleBulkDelete()} oncancel={() => { showBulkDelete = false; }} />
+  </Modal>
+{/if}
+
 {#if activeBook !== undefined}
   <BookDetailModal book={activeBook} {genres} series={allSeries} {seriesBookCounts} onRequestClose={handleDetailClose} />
 {/if}
@@ -269,9 +328,12 @@
 <style>
   .books-page { display: flex; flex-direction: column; min-height: 0; flex: 1; }
   .page-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .page-title { font-family: var(--font-heading-1); font-size: var(--fs-heading-1); font-weight: 700; color: var(--text); margin: 0; }
+  .toolbar-tabs { display: flex; gap: 5px; background: var(--bg-bar); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; }
+  .tab-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 150px; height: 35px; padding: 0; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 500; color: var(--text-dim); text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px; border-radius: calc(var(--radius) - 1px); transition: all 0.2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-btn:hover { color: var(--amber); background: var(--bg-elevated); }
+  .tab-btn.active { color: var(--amber); background: rgba(255, 140, 0, 0.1); }
   .toolbar-actions { display: flex; gap: 6px; }
-  .tool-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: 34px; box-sizing: border-box; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; font-family: var(--font-body); font-size: var(--fs-body); transition: all 0.2s; }
+  .tool-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: 35px; box-sizing: border-box; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; font-family: var(--font-body); font-size: var(--fs-body); transition: all 0.2s; }
   .tool-btn:hover { color: var(--cyan); border-color: var(--cyan); }
   .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; color: var(--text-dim); border-color: var(--border); }
   .spin { animation: spin 1s linear infinite; }
@@ -292,8 +354,14 @@
   .card-grid.density-normal { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
   .card-grid.density-large { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
   .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  .multi-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: rgba(0,212,255,0.06); border: 1px solid var(--cyan-dim); border-radius: var(--radius); margin-bottom: 10px; }
+  .selected-count { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text); font-weight: 600; }
+  .bulk-delete-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); padding: 6px 14px; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 600; cursor: pointer; transition: all 0.2s; margin-left: auto; }
+  .bulk-delete-btn:hover { background: rgba(239,68,68,0.1); }
+  .col-check { width: 40px; text-align: center; }
+  .col-check input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; cursor: pointer; }
   table { width: 100%; border-collapse: collapse; font-family: var(--font-body); font-size: var(--fs-body); }
-  th { background: var(--bg-card); padding: 10px 12px; text-align: left; font-family: var(--font-heading-1); font-size: var(--fs-caption); font-weight: 600; color: var(--cyan); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  th { background: var(--bg-card); padding: 10px 12px; text-align: left; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
   td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
   .col-actions { width: 80px; text-align: center; }

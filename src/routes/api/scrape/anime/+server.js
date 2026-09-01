@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import db from '$lib/server/db.js';
+import { searchImdb, IMDB_KINDS } from '$lib/server/imdb-search.js';
 
 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
@@ -169,20 +170,27 @@ async function searchKitsu(searchTerm) {
 }
 
 async function searchByNameMulti(searchTerm) {
-  const [aniResults, jikanResults, kitsuResults] = await Promise.all([
+  const [imdbResults, aniResults, jikanResults, kitsuResults] = await Promise.all([
+    searchImdb(searchTerm, { kinds: IMDB_KINDS.anime }),
     searchAniListMulti(searchTerm),
     searchJikan(searchTerm),
     searchKitsu(searchTerm)
   ]);
+  const sources = [imdbResults, aniResults, jikanResults, kitsuResults];
   const seen = new Set();
   const merged = [];
-  for (const r of [...aniResults, ...jikanResults, ...kitsuResults]) {
-    if (!r.cover_url) continue;
-    const key = r.cover_url;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(r);
-    if (merged.length >= 10) break;
+  let i = 0;
+  while (merged.length < 12 && sources.some(s => i < s.length)) {
+    for (const src of sources) {
+      if (i < src.length) {
+        const r = src[i];
+        if (r.cover_url && !seen.has(r.cover_url)) {
+          seen.add(r.cover_url);
+          merged.push(r);
+        }
+      }
+    }
+    i++;
   }
   return merged;
 }
@@ -314,30 +322,31 @@ function resolveGenres(scrapedGenres) {
 async function buildCoversList(scrapedTitle, scrapedCoverUrl) {
   const covers = [];
   const seen = new Set();
-  if (scrapedCoverUrl) {
-    seen.add(scrapedCoverUrl);
-    covers.push({ url: scrapedCoverUrl, source: 'URL' });
-  }
   if (scrapedTitle?.trim()) {
-    const [aniResults, jikanResults, kitsuResults] = await Promise.all([
+    const [imdbResults, aniResults, jikanResults, kitsuResults] = await Promise.all([
+      searchImdb(scrapedTitle.trim(), { kinds: IMDB_KINDS.anime }),
       searchAniListMulti(scrapedTitle.trim()),
       searchJikan(scrapedTitle.trim()),
       searchKitsu(scrapedTitle.trim())
     ]);
-    for (const r of [...aniResults, ...jikanResults, ...kitsuResults]) {
+    for (const r of [...imdbResults, ...aniResults, ...jikanResults, ...kitsuResults]) {
       if (!r.cover_url) continue;
       if (seen.has(r.cover_url)) continue;
       seen.add(r.cover_url);
       covers.push({ url: r.cover_url, source: r.source });
     }
   }
-  return covers;
+  if (scrapedCoverUrl && !seen.has(scrapedCoverUrl)) {
+    seen.add(scrapedCoverUrl);
+    covers.push({ url: scrapedCoverUrl, source: 'URL' });
+  }
+  return { covers, defaultCoverUrl: covers[0]?.url || scrapedCoverUrl || '' };
 }
 
 async function resolveResult({ title, cover_url, genres, synopsis }) {
-  const covers = await buildCoversList(title, cover_url);
+  const built = await buildCoversList(title, cover_url);
   const seasons = await discoverSeasonsByTitle(title);
-  return { title, synopsis, cover_url, ...resolveGenres(genres), covers, seasons };
+  return { title, synopsis, cover_url: built.defaultCoverUrl, ...resolveGenres(genres), covers: built.covers, seasons };
 }
 
 export async function POST({ request }) {
@@ -379,9 +388,9 @@ export async function POST({ request }) {
       if (isCrunchyroll) {
         const al = await resolveViaAniList(url);
         if (al) {
-          const covers = await buildCoversList(al.title, al.cover_url);
+          const built = await buildCoversList(al.title, al.cover_url);
           const seasons = al.id ? await discoverSeasons(al.id) : [];
-          return json({ ...al, ...resolveGenres(al.genres), covers, seasons });
+          return json({ ...al, cover_url: built.defaultCoverUrl, ...resolveGenres(al.genres), covers: built.covers, seasons });
         }
       }
       if (res.status === 403) {
@@ -395,17 +404,17 @@ export async function POST({ request }) {
     const synopsis = extractDescription(html);
     const cover_url = extractImage(html);
     const scrapedGenres = extractGenres(html);
-    const covers = await buildCoversList(title, cover_url);
+    const built = await buildCoversList(title, cover_url);
     const seasons = await discoverSeasonsByTitle(title);
 
-    return json({ title, cover_url, synopsis, ...resolveGenres(scrapedGenres), covers, seasons });
+    return json({ title, cover_url: built.defaultCoverUrl, synopsis, ...resolveGenres(scrapedGenres), covers: built.covers, seasons });
   } catch (err) {
     if (isCrunchyroll) {
       const al = await resolveViaAniList(url);
       if (al) {
-        const covers = await buildCoversList(al.title, al.cover_url);
+        const built = await buildCoversList(al.title, al.cover_url);
         const seasons = al.id ? await discoverSeasons(al.id) : [];
-        return json({ ...al, ...resolveGenres(al.genres), covers, seasons });
+        return json({ ...al, cover_url: built.defaultCoverUrl, ...resolveGenres(al.genres), covers: built.covers, seasons });
       }
     }
     return json({ error: err.message || 'Failed to fetch URL' }, { status: 502 });

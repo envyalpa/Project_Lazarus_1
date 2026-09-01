@@ -7,6 +7,7 @@
   import AnimeDetailForm from '$lib/components/lounge/AnimeDetailForm.svelte';
   import AnimeSeasonsPanel from '$lib/components/lounge/AnimeSeasonsPanel.svelte';
   import AnimeUrlScraper from '$lib/components/lounge/AnimeUrlScraper.svelte';
+  import AnimeHeroWrapper from '$lib/components/lounge/AnimeHeroWrapper.svelte';
   import SeasonForm from '$lib/components/lounge/SeasonForm.svelte';
   import DeleteConfirm from '$lib/components/operations/DeleteConfirm.svelte';
   let { anime: initialAnime, genres = [], onclose } = $props();
@@ -18,11 +19,14 @@
   let showSeasonModal = $state(false);
   let editSeason = $state(null);
   let deleteItem = $state(null);
+  let deleteSeason = $state(null);
   let mode = $derived(anime ? 'edit' : 'create');
+  let heroDismissed = $state(false);
   
   let syncOpen = $state(false);
   let syncSeasons = $state([]);
   let syncLoading = $state(false);
+  let syncError = $state(false);
   
   let saveFn = $state(null);
   let formDirty = $state(false);
@@ -73,6 +77,7 @@
     scrapedData = { ...data };
     scrapedSeasons = (data.seasons || []).map(s => ({ ...s, checked: true }));
     searchResults = [];
+    if (data.title) notify("Commander, fetched: " + data.title);
   }
 
   $effect(() => {
@@ -97,28 +102,48 @@
   }
 
   async function handleSaveSeason(data) {
+    let res;
     if (editSeason) {
-      await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: editSeason.id, ...data }) });
-      notify("Commander, season updated for " + (anime?.title || ''));
+      res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: editSeason.id, ...data }) });
     } else {
-      await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...data }) });
-      notify("Commander, season added to " + (anime?.title || ''));
+      res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...data }) });
     }
+    if (!res.ok) {
+      notify("Commander, failed to save the season. Please try again.");
+      return;
+    }
+    notify("Commander, season " + (editSeason ? 'updated for ' : 'added to ') + (anime?.title || ''));
     await loadSeasons(); showSeasonModal = false; editSeason = null;
   }
 
   async function handleIncrement(id) {
-    await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'increment', id }) });
+    const res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'increment', id }) });
+    if (!res.ok) { notify("Commander, could not update episode count."); return; }
     await loadSeasons();
   }
 
   async function handleDecrement(id) {
-    await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'decrement', id }) });
+    const res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'decrement', id }) });
+    if (!res.ok) { notify("Commander, could not update episode count."); return; }
     await loadSeasons();
   }
 
-  async function handleDeleteSeason(season) {
-    await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: season.id }) });
+  async function handleMarkAll(id) {
+    const res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark-all', id }) });
+    if (!res.ok) { notify("Commander, could not mark season as watched."); return; }
+    await loadSeasons();
+  }
+
+  function handleDeleteSeason(season) {
+    deleteSeason = season;
+  }
+
+  async function confirmDeleteSeason() {
+    const season = deleteSeason;
+    if (!season) return;
+    const res = await fetch(`/lounge/anime/${animeId}/seasons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: season.id }) });
+    deleteSeason = null;
+    if (!res.ok) { notify("Commander, failed to remove the season."); return; }
     notify("Commander, season removed from " + (anime?.title || ''));
     await loadSeasons();
   }
@@ -127,19 +152,19 @@
     const title = anime?.title;
     if (!title) return;
     syncLoading = true;
+    syncError = false;
     syncOpen = true;
     try {
       const res = await fetch('/api/scrape/anime', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sync-seasons', title })
       });
-      if (res.ok) {
-        const data = await res.json();
-        syncSeasons = (data.seasons || []).map(s => ({ ...s, checked: true }));
-      } else {
-        syncSeasons = [];
-      }
+      if (!res.ok) throw new Error('Sync failed');
+      const data = await res.json();
+      const existing = new Set(seasons.map(s => s.season_number));
+      syncSeasons = (data.seasons || []).filter(s => !existing.has(s.season_number)).map(s => ({ ...s, checked: true }));
     } catch {
+      syncError = true;
       syncSeasons = [];
     }
     syncLoading = false;
@@ -147,16 +172,21 @@
 
   async function handleAcceptSync() {
     const toCreate = syncSeasons.filter(s => s.checked);
-    for (const s of toCreate) {
-      await fetch(`/lounge/anime/${animeId}/seasons`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', season_number: s.season_number, total_episodes: s.total_episodes, episodes_watched: 0 })
-      });
+    let created = 0;
+    try {
+      for (const s of toCreate) {
+        const res = await fetch(`/lounge/anime/${animeId}/seasons`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', season_number: s.season_number, total_episodes: s.total_episodes, episodes_watched: 0 })
+        });
+        if (res.ok) created++;
+      }
+    } finally {
+      syncOpen = false;
+      syncSeasons = [];
+      await loadSeasons();
     }
-    notify("Commander, " + toCreate.length + " seasons synced to " + (anime?.title || ''));
-    syncOpen = false;
-    syncSeasons = [];
-    await loadSeasons();
+    notify("Commander, " + created + " of " + toCreate.length + " seasons synced to " + (anime?.title || ''));
   }
 
   function handleFormSaved(savedAnime) {
@@ -168,7 +198,7 @@
 </script>
 
 <div class="anime-modal-wrap">
-<Modal open={true} full={mode !== 'create'} narrow={mode === 'create'} noHeader={true} noBodyScroll={true} onclose={onclose}>
+<Modal open={true} full={mode !== 'create'} narrow={mode === 'create'} noHeader={true} noBodyScroll={true} label={mode === 'create' ? 'Add Anime' : 'Edit Anime'} onclose={onclose}>
   <div data-section="anime-detail-modal" class="detail-modal-body">
     {#if mode === 'create' || anime}
       <div class="detail-grid">
@@ -199,6 +229,9 @@
         {/snippet}
 
         <div class="left-col">
+          {#if mode === 'edit' && anime && !heroDismissed}
+            <AnimeHeroWrapper show={anime} {seasons} onincrement={handleIncrement} onedit={() => { heroDismissed = true; }} />
+          {/if}
           {#if mode === 'create'}
             <Panel title="Auto-Fetch" icon={Search}>
               <AnimeUrlScraper onscraped={handleScraped}
@@ -219,7 +252,7 @@
               oncancel={onclose} />
           </Panel>
           {#if mode === 'create'}
-            <button type="button" class="create-save-btn" onclick={async () => { if (saveFn) await saveFn(); }} disabled={!formDirty}>
+            <button type="button" class="create-save-btn" onclick={async () => { if (saveFn) await saveFn(); }} disabled={!formDirty} title={formDirty ? 'Save this anime' : 'Enter a title to enable'}>
               <Plus size={20} /> Add Anime
             </button>
           {/if}
@@ -260,10 +293,10 @@
                             </span>
                             <span class="sc-episodes">{s.total_episodes} ep{s.total_episodes !== 1 ? 's' : ''}</span>
                             <div class="season-card-actions">
-                              <button type="button" class="sr-btn" onclick={() => { editSeason = s; showSeasonModal = true; }} title="Edit">
+                              <button type="button" class="sr-btn" onclick={() => { editSeason = s; showSeasonModal = true; }} title="Edit" aria-label="Edit season">
                                 <Pencil size={13} />
                               </button>
-                              <button type="button" class="sr-btn sr-btn-del" onclick={() => { manualSeasons = manualSeasons.filter(x => x._tempId !== s._tempId); }} title="Remove">
+                              <button type="button" class="sr-btn sr-btn-del" onclick={() => { manualSeasons = manualSeasons.filter(x => x._tempId !== s._tempId); }} title="Remove" aria-label="Remove season">
                                 <Trash2 size={13} />
                               </button>
                             </div>
@@ -311,10 +344,10 @@
             </Panel>
           {:else}
             {#snippet seasonsHeaderRight()}
-              <button type="button" class="panel-header-btn sync-btn" onclick={handleSyncSeasons} title="Sync seasons from AniList">
+              <button type="button" class="panel-header-btn sync-btn" onclick={handleSyncSeasons} title="Sync seasons from AniList" aria-label="Sync seasons from AniList">
                 <RefreshCw size={16} />
               </button>
-              <button type="button" class="panel-header-btn close-btn" onclick={onclose} title="Close">
+              <button type="button" class="panel-header-btn close-btn" onclick={onclose} title="Close" aria-label="Close">
                 <X size={18} />
               </button>
             {/snippet}
@@ -323,7 +356,7 @@
                 loading={seasonsLoading}
                 headerRight={seasonsHeaderRight}
                 onedit={(s) => { editSeason = s; showSeasonModal = true; }} ondelete={handleDeleteSeason}
-                onincrement={handleIncrement} ondecrement={handleDecrement}
+                onincrement={handleIncrement} ondecrement={handleDecrement} onmarkall={handleMarkAll}
                 onadd={() => { editSeason = null; showSeasonModal = true; }} />
             </div>
           {/if}
@@ -344,6 +377,8 @@
     <div data-section="sync-seasons-modal" class="sync-modal-body">
       {#if syncLoading}
         <div class="sync-status">Looking up seasons on AniList...</div>
+      {:else if syncError}
+        <div class="sync-status">Sync failed — check your connection and try again.</div>
       {:else if syncSeasons.length === 0}
         <div class="sync-status">No seasons found for this title.</div>
       {:else}
@@ -373,12 +408,21 @@
     <DeleteConfirm title="Delete Anime" item={{ name: deleteItem.title, id: deleteItem.id }} onconfirm={handleDeleteAnime} oncancel={() => { deleteItem = null; }} />
   </Modal>
 {/if}
+{#if deleteSeason}
+  <Modal open={true} noHeader={true} compact onclose={() => { deleteSeason = null; }}>
+    <DeleteConfirm
+      title="Delete Season"
+      item={{ name: `Season ${deleteSeason.season_number}`, id: deleteSeason.id }}
+      detailText={`This removes ${deleteSeason.episodes_watched ?? 0}/${deleteSeason.total_episodes ?? 0} episodes watched.`}
+      onconfirm={confirmDeleteSeason}
+      oncancel={() => { deleteSeason = null; }} />
+  </Modal>
+{/if}
 
 <style>
   .detail-modal-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; }
-  .detail-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 10px; flex: 1; min-height: 0; }
-  .detail-grid.single-col { grid-template-columns: 1fr; }
-  .left-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+  .detail-grid { display: grid; grid-template-columns: 1.36fr 1fr; gap: 10px; flex: 1; min-height: min(700px, 70vh); }
+  .left-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; position: relative; }
   .left-col > :global(.panel.stretch) { flex: 1; min-height: 0; }
   .right-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
   .right-col > :global(.panel.stretch) { flex: 1; min-height: 0; }
@@ -433,9 +477,9 @@
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   
   .anime-modal-wrap {
-    --modal-full-width: 80vw;
+    --modal-full-width: 70vw;
     --modal-full-height: 80vh;
-    --modal-narrow-width: 80vw;
+    --modal-narrow-width: 70vw;
     --modal-narrow-height: 80vh;
   }
 
@@ -457,7 +501,7 @@
   .season-card-actions .sr-btn {
     display: flex; align-items: center; justify-content: center;
     width: 24px; height: 24px; background: none; border: none;
-    color: var(--text-dim); cursor: pointer; border-radius: 3px;
+    color: var(--text-dim); cursor: pointer; border-radius: var(--radius);
     transition: all 0.15s;
   }
   .season-card-actions .sr-btn:hover { color: var(--cyan); background: rgba(0,212,255,0.08); }
@@ -494,7 +538,7 @@
     text-align: left; font-family: inherit; color: inherit; box-sizing: border-box;
   }
   .search-result-card:hover { border-color: var(--cyan); }
-  .sr-thumb { width: 40px; height: 56px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+  .sr-thumb { width: 40px; height: 56px; object-fit: cover; border-radius: var(--radius); flex-shrink: 0; }
   .sr-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .sr-title { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sr-source { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text-muted); }
@@ -521,4 +565,9 @@
   }
   .create-save-btn:hover:not(:disabled) { filter: brightness(1.2); }
   .create-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  @media (max-width: 900px) {
+    .detail-grid { grid-template-columns: 1fr; min-height: 0; }
+    :global(.modal-body.no-scroll) { overflow-y: auto; }
+  }
 </style>

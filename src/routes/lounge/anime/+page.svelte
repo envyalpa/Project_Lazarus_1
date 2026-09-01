@@ -1,16 +1,19 @@
 <script>
   import { page } from '$app/stores';
-  import { Plus, ArrowUpDown, LayoutGrid, Table, Pencil, Trash2, Star, Flame, ListChecks, Minimize2, Equal, Maximize2, Filter } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
+  import { Plus, ArrowUpDown, LayoutGrid, Table, Pencil, Trash2, Star, Flame, ListChecks, Minimize2, Equal, Maximize2, Play, Circle, Clock, Check, BarChart3 } from '@lucide/svelte';
   import { notify } from '$lib/stores/notification.js';
   import Panel from '$lib/components/Panel.svelte';
   import AnimeCard from '$lib/components/lounge/AnimeCard.svelte';
   import AnimeDetailModal from '$lib/components/lounge/AnimeDetailModal.svelte';
   import Modal from '$lib/components/operations/Modal.svelte';
   import DeleteConfirm from '$lib/components/operations/DeleteConfirm.svelte';
+  import AnimeStatsPanel from '$lib/components/lounge/AnimeStatsPanel.svelte';
 
   let { data } = $props();
   let anime = $state(data.anime);
   let genres = $state(data.genres);
+  let seasonsMap = $state(data.seasonsMap);
 
   let deleteItem = $state(null);
   let viewMode = $state('card');
@@ -18,11 +21,12 @@
   let showProps = $state(false);
   let visibleProps = $state(loadProps());
   let detailAnime = $state(undefined);
+  let showStats = $state(false);
   let cardDensity = $state('normal');
   let statusFilter = $state(loadFilter());
+  let selectedItems = $state([]);
+  let showBulkDelete = $state(false);
 
-  const filterOrder = ['all', 'not_started', 'watching', 'next-season', 'completed'];
-  const filterLabels = { all: 'All', not_started: 'Not Started', watching: 'Watching', 'next-season': 'Next Season', completed: 'Completed' };
   const densityOrder = ['compact', 'normal', 'large'];
   const densityIcons = { compact: Minimize2, normal: Equal, large: Maximize2 };
 
@@ -30,7 +34,7 @@
     if ($page.url.searchParams.has('open')) {
       const id = $page.url.searchParams.get('open');
       detailAnime = anime.find(a => a.id == id) || undefined;
-      history.replaceState(null, '', '/lounge/anime');
+      goto('/lounge/anime', { replaceState: true });
     }
   });
 
@@ -88,15 +92,14 @@
     localStorage.setItem('lazarus-anime-sort', sortMode);
   }
 
-  function cycleFilter() {
-    const i = filterOrder.indexOf(statusFilter);
-    statusFilter = filterOrder[(i + 1) % filterOrder.length];
-    localStorage.setItem('lazarus-anime-status-filter', statusFilter);
-  }
-
   function cycleDensity() {
     const i = densityOrder.indexOf(cardDensity);
     cardDensity = densityOrder[(i + 1) % densityOrder.length];
+  }
+
+  function setStatusFilter(status) {
+    statusFilter = status;
+    localStorage.setItem('lazarus-anime-status-filter', status);
   }
 
   async function handleDelete(id) {
@@ -107,6 +110,34 @@
     anime = anime.filter(a => a.id !== id);
     notify("Commander, anime deleted: " + (item?.title || ''));
     deleteItem = null;
+  }
+
+  function toggleAll() {
+    if (selectedItems.length === sorted.length) {
+      selectedItems = [];
+    } else {
+      selectedItems = sorted.map(s => s.id);
+    }
+  }
+
+  function toggleOne(id) {
+    if (selectedItems.includes(id)) {
+      selectedItems = selectedItems.filter(i => i !== id);
+    } else {
+      selectedItems = [...selectedItems, id];
+    }
+  }
+
+  async function handleBulkDelete() {
+    await fetch('/lounge/anime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bulk_delete: true, ids: selectedItems })
+    });
+    anime = anime.filter(a => !selectedItems.includes(a.id));
+    notify("Commander, " + selectedItems.length + " anime deleted.");
+    selectedItems = [];
+    showBulkDelete = false;
   }
 
   function openEdit(item) { detailAnime = item; }
@@ -126,15 +157,17 @@
 
 <div data-section="anime-page" class="anime-page">
   <div class="page-toolbar">
-    <h2 class="page-title" data-label="page-title">Anime Collection</h2>
+    <div class="toolbar-tabs">
+      <button type="button" class="tab-btn" class:active={statusFilter === 'watching'} onclick={() => setStatusFilter('watching')}><Play size={16} /><span>Watching</span></button>
+      <button type="button" class="tab-btn" class:active={statusFilter === 'not_started'} onclick={() => setStatusFilter('not_started')}><Circle size={16} /><span>Not Started</span></button>
+      <button type="button" class="tab-btn" class:active={statusFilter === 'next-season'} onclick={() => setStatusFilter('next-season')}><Clock size={16} /><span>Next Season</span></button>
+      <button type="button" class="tab-btn" class:active={statusFilter === 'completed'} onclick={() => setStatusFilter('completed')}><Check size={16} /><span>Finished</span></button>
+      <button type="button" class="tab-btn" class:active={statusFilter === 'all'} onclick={() => setStatusFilter('all')}><LayoutGrid size={16} /><span>All</span></button>
+    </div>
     <div class="toolbar-actions">
       <button type="button" class="tool-btn sort-btn" onclick={cycleSort} title="Sort">
         <ArrowUpDown size={18} />
         <span>{sortLabels[sortMode]}</span>
-      </button>
-      <button type="button" class="tool-btn filter-btn" class:filter-active={statusFilter !== 'all'} onclick={cycleFilter} title="Filter by status">
-        <Filter size={18} />
-        <span>{filterLabels[statusFilter]}</span>
       </button>
       <button type="button" class="tool-btn toggle-btn" class:toggle-active={viewMode === 'card'} onclick={() => { viewMode = viewMode === 'card' ? 'table' : 'card'; }}>
         {#if viewMode === 'card'}
@@ -154,6 +187,9 @@
           {/if}
         </button>
       {/if}
+      <button type="button" class="tool-btn" class:toggle-active={showStats} onclick={() => { showStats = !showStats; }} title="Stats">
+        <BarChart3 size={18} />
+      </button>
       <div data-section="props-dropdown" class="props-wrap">
         <button type="button" class="tool-btn props-btn" onclick={() => { showProps = !showProps; }} title="Card Properties">
           <ListChecks size={20} />
@@ -199,9 +235,18 @@
       </div>
     {:else}
       <div data-section="anime-table" class="table-wrap">
+        {#if selectedItems.length > 0}
+          <div data-label="multi-select-toolbar" class="multi-toolbar">
+            <span class="selected-count">{selectedItems.length} selected</span>
+            <button type="button" class="bulk-delete-btn" onclick={() => { showBulkDelete = true; }}>
+              <Trash2 size={14} /> Delete Selected
+            </button>
+          </div>
+        {/if}
         <table>
           <thead>
             <tr>
+              <th class="col-check"><input type="checkbox" checked={selectedItems.length === sorted.length && sorted.length > 0} onchange={toggleAll} /></th>
               <th>Title</th>
               <th>Status</th>
               <th>Rating</th>
@@ -213,6 +258,7 @@
           <tbody>
             {#each sorted as item (item.id)}
               <tr>
+                <td class="col-check"><input type="checkbox" checked={selectedItems.includes(item.id)} onchange={() => toggleOne(item.id)} /></td>
                 <td><button type="button" class="table-link-btn" onclick={() => handleSelect(item)}>{item.title}</button></td>
                 <td><span class="status-pill" style="color: {item.status === 'watching' ? 'var(--cyan)' : item.status === 'next-season' ? 'var(--amber)' : item.status === 'completed' ? 'var(--success)' : 'var(--text-dim)'}">{statusLabel(item.status)}</span></td>
                 <td>
@@ -254,8 +300,18 @@
   </Modal>
 {/if}
 
+{#if showBulkDelete}
+  <Modal open={true} noHeader={true} compact onclose={() => { showBulkDelete = false; }}>
+    <DeleteConfirm title="Delete Selected Anime" item={{ name: selectedItems.length + ' anime', id: null }} onconfirm={() => handleBulkDelete()} oncancel={() => { showBulkDelete = false; }} />
+  </Modal>
+{/if}
+
 {#if detailAnime !== undefined}
   <AnimeDetailModal anime={detailAnime} {genres} onclose={handleDetailClose} />
+{/if}
+
+{#if showStats}
+  <AnimeStatsPanel {anime} {seasonsMap} onclose={() => { showStats = false; }} />
 {/if}
 
 <style>
@@ -268,13 +324,10 @@
     margin-bottom: 10px;
   }
 
-  .page-title {
-    font-family: var(--font-heading-1);
-    font-size: var(--fs-heading-1);
-    font-weight: 700;
-    color: var(--text);
-    margin: 0;
-  }
+  .toolbar-tabs { display: flex; gap: 5px; background: var(--bg-bar); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; }
+  .tab-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 150px; height: 35px; padding: 0; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 500; color: var(--text-dim); text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px; border-radius: calc(var(--radius) - 1px); transition: all 0.2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border: none; cursor: pointer; }
+  .tab-btn:hover { color: var(--amber); background: var(--bg-elevated); }
+  .tab-btn.active { color: var(--amber); background: rgba(255, 140, 0, 0.1); }
 
   .toolbar-actions {
     display: flex;
@@ -299,7 +352,6 @@
   }
 
   .tool-btn:hover { color: var(--cyan); border-color: var(--cyan); }
-  .filter-btn.filter-active,
   .toggle-btn.toggle-active { color: var(--cyan); border-color: var(--cyan); background: rgba(0, 212, 255, 0.08); }
 
   .add-btn { color: var(--cyan); }
@@ -375,6 +427,13 @@
     border-radius: var(--radius);
   }
 
+  .multi-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: rgba(0,212,255,0.06); border: 1px solid var(--cyan-dim); border-radius: var(--radius); margin-bottom: 10px; }
+  .selected-count { font-family: var(--font-body); font-size: var(--fs-small); color: var(--text); font-weight: 600; }
+  .bulk-delete-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); padding: 6px 14px; font-family: var(--font-body); font-size: var(--fs-small); font-weight: 600; cursor: pointer; transition: all 0.2s; margin-left: auto; }
+  .bulk-delete-btn:hover { background: rgba(239,68,68,0.1); }
+  .col-check { width: 40px; text-align: center; }
+  .col-check input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; cursor: pointer; }
+
   table {
     width: 100%;
     border-collapse: collapse;
@@ -386,10 +445,10 @@
     background: var(--bg-card);
     padding: 10px 12px;
     text-align: left;
-    font-family: var(--font-heading-1);
-    font-size: var(--fs-heading-2);
-    font-weight: 600;
-    color: var(--cyan);
+    font-family: var(--font-body);
+    font-size: var(--fs-small);
+    font-weight: 500;
+    color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 1px;
     border-bottom: 1px solid var(--border);
