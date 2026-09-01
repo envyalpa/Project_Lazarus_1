@@ -32,9 +32,11 @@ data/
 # Compiled whisper binaries
 /bin/
 
-# Local OpenCode & CodeGraph Indexes
+# Local agent tooling state (machine-specific)
 .codegraph/
 .opencode/
+.codex/
+.impeccable/
 
 # Knowledge Graph Artifacts
 /graphify-out/
